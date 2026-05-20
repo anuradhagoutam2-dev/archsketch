@@ -1,0 +1,2487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchSketch — Architecture Diagramming Tool</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-editor: #0d1117;
+            --border: #30363d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --error: #f85149;
+            --toolbar-height: 56px;
+            --statusbar-height: 28px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* TOOLBAR */
+        .toolbar {
+            height: var(--toolbar-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-right: auto;
+        }
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #58a6ff, #3fb950);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #e6edf3;
+        }
+        .logo-text span { color: #58a6ff; }
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: var(--border);
+        }
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+        }
+        .btn:hover {
+            background: rgba(88, 166, 255, 0.1);
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+        .download-group { display: flex; gap: 6px; }
+        .privacy-badge {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: #3fb950;
+            padding: 3px 10px;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* MODE BAR */
+        .modebar {
+            height: 36px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 3px;
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+        .modebar::-webkit-scrollbar { height: 3px; }
+        .mode-btn {
+            padding: 3px 11px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.12s;
+        }
+        .mode-btn:hover {
+            background: rgba(88,166,255,0.08);
+            color: var(--text-primary);
+        }
+        .mode-btn.active {
+            background: rgba(88,166,255,0.15);
+            border-color: rgba(88,166,255,0.35);
+            color: #58a6ff;
+            font-weight: 600;
+        }
+        .modebar-sep {
+            width: 1px;
+            height: 16px;
+            background: var(--border);
+            margin: 0 4px;
+            flex-shrink: 0;
+        }
+
+        /* MAIN LAYOUT */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* EDITOR PANE */
+        .editor-pane {
+            width: 42%;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            background: var(--bg-editor);
+        }
+        .pane-header {
+            height: 36px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-secondary);
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .pane-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .editor-wrapper {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 44px;
+            padding: 14px 0;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            text-align: right;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.65;
+            color: var(--text-secondary);
+            overflow: hidden;
+            user-select: none;
+        }
+        .line-numbers span {
+            display: block;
+            padding-right: 8px;
+        }
+        #code-editor {
+            position: absolute;
+            left: 44px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            padding: 14px 16px;
+            background: transparent;
+            border: none;
+            outline: none;
+            resize: none;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.65;
+            color: #c9d1d9;
+            overflow-y: auto;
+            tab-size: 2;
+        }
+        #code-editor::selection { background: rgba(88, 166, 255, 0.3); }
+
+        /* ERROR PANEL */
+        .error-panel {
+            border-top: 1px solid var(--border);
+            background: rgba(248, 81, 73, 0.07);
+            max-height: 90px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            display: none;
+        }
+        .error-panel.visible { display: block; }
+        .error-item {
+            padding: 5px 16px;
+            font-size: 12px;
+            color: var(--error);
+            font-family: 'Consolas', monospace;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            line-height: 1.5;
+        }
+        .error-item::before { content: '⚠ '; flex-shrink: 0; }
+
+        /* RESIZER */
+        .resizer {
+            width: 4px;
+            background: var(--border);
+            cursor: col-resize;
+            flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .resizer:hover { background: #58a6ff; }
+
+        /* PREVIEW PANE */
+        .preview-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #ffffff;
+            overflow: hidden;
+        }
+        .preview-pane .pane-header {
+            background: #f0f2f4;
+            border-bottom: 1px solid #d0d7de;
+            color: #57606a;
+        }
+        .preview-wrapper {
+            flex: 1;
+            overflow: auto;
+            padding: 32px;
+            background: #ffffff;
+        }
+        #diagram-output {
+            display: inline-block;
+            min-width: 200px;
+            vertical-align: top;
+        }
+        #diagram-output svg { display: block; }
+
+        /* ZOOM CONTROLS */
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            margin-left: 12px;
+        }
+        .zoom-btn {
+            width: 22px;
+            height: 22px;
+            border-radius: 4px;
+            border: 1px solid #d0d7de;
+            background: #f6f8fa;
+            color: #57606a;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            line-height: 1;
+            transition: all 0.12s;
+        }
+        .zoom-btn:hover { background: #e2e8f0; color: #1a202c; border-color: #57606a; }
+        .zoom-btn.reset { font-size: 10px; font-weight: 400; width: auto; padding: 0 6px; }
+        .dir-toggle {
+            display: none;
+            align-items: center;
+            gap: 3px;
+            margin-left: 10px;
+            padding-left: 10px;
+            border-left: 1px solid #d0d7de;
+        }
+        .dir-btn {
+            height: 22px;
+            border-radius: 4px;
+            border: 1px solid #d0d7de;
+            background: #f6f8fa;
+            color: #57606a;
+            font-size: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 0 7px;
+            transition: all 0.12s;
+            white-space: nowrap;
+        }
+        .dir-btn:hover { background: #e2e8f0; color: #1a202c; border-color: #57606a; }
+        .dir-btn.active {
+            background: rgba(88,166,255,0.12);
+            border-color: #58a6ff;
+            color: #58a6ff;
+        }
+        #zoom-level {
+            font-size: 11px;
+            color: #57606a;
+            min-width: 34px;
+            text-align: center;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            color: #8b949e;
+            text-align: center;
+            padding: 40px;
+        }
+        .empty-icon { font-size: 52px; opacity: 0.2; }
+        .empty-state h3 { font-size: 15px; font-weight: 600; color: #57606a; }
+        .empty-state p { font-size: 13px; max-width: 280px; line-height: 1.6; }
+
+        /* STATUS BAR */
+        .statusbar {
+            height: var(--statusbar-height);
+            background: #238636;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            gap: 20px;
+            font-size: 11px;
+            color: rgba(255,255,255,0.9);
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+        .statusbar.has-errors { background: #b91c1c; }
+        .statusbar .right { margin-left: auto; opacity: 0.7; }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #8b949e; }
+
+        /* HELP MODAL */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 780px;
+            max-height: 84vh;
+            overflow-y: auto;
+            padding: 28px;
+        }
+        .modal h2 {
+            font-size: 17px;
+            margin-bottom: 20px;
+            color: #e6edf3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal h3 {
+            font-size: 11px;
+            color: #58a6ff;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin: 18px 0 8px;
+            font-weight: 600;
+        }
+        .modal pre {
+            background: var(--bg-editor);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 14px;
+            font-size: 12px;
+            line-height: 1.7;
+            color: #c9d1d9;
+            overflow-x: auto;
+            font-family: 'Consolas', monospace;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 4px;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        .color-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 8px;
+        }
+        .color-chip {
+            padding: 3px 9px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-family: 'Consolas', monospace;
+        }
+        .rule-item {
+            font-size: 12px;
+            color: #c9d1d9;
+            padding: 4px 0;
+            display: flex;
+            gap: 8px;
+        }
+        .rule-item::before { content: '✓'; color: #3fb950; }
+        .help-intro {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        .help-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .help-table th {
+            text-align: left;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 6px 8px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .help-table td {
+            padding: 5px 8px;
+            color: var(--text-primary);
+            border-bottom: 1px solid rgba(48,54,61,0.5);
+            vertical-align: top;
+            line-height: 1.5;
+        }
+        .help-table td:first-child {
+            font-family: 'Consolas', monospace;
+            color: #58a6ff;
+            white-space: nowrap;
+        }
+        .mode-badge {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: rgba(88, 166, 255, 0.12);
+            border: 1px solid rgba(88, 166, 255, 0.25);
+            color: #58a6ff;
+            display: none;
+            margin-left: 8px;
+        }
+        .mode-badge.error {
+            background: rgba(248, 81, 73, 0.15);
+            border-color: rgba(248, 81, 73, 0.3);
+            color: #f85149;
+        }
+
+        /* ROADMAP RENDERER */
+        .rmw {
+            background: #ffffff;
+            padding: 40px 48px 52px;
+            min-width: max-content;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+        .rmt {
+            text-align: center;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 5px;
+            color: #1e293b;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .rmt-sub {
+            text-align: center;
+            font-size: 11px;
+            color: #94a3b8;
+            letter-spacing: 1px;
+            margin-bottom: 44px;
+        }
+        .rms { display: flex; align-items: flex-start; gap: 0; }
+        .rmg { display: flex; flex-direction: column; }
+        .rmyh {
+            display: flex;
+            align-items: center;
+            padding: 0 8px 10px;
+            border-bottom: 1px solid;
+            margin-bottom: 0;
+            gap: 8px;
+        }
+        .rmyl {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2.5px;
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+        .rmyr { flex: 1; height: 1px; opacity: 0.25; }
+        .rmr { display: flex; }
+        .rmi { display: flex; flex-direction: column; align-items: center; width: 168px; padding: 0 6px; }
+        .rmline {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 22px;
+        }
+        .rmrail { flex: 1; height: 2px; opacity: 0.4; }
+        .rmdot {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+        }
+        .rmdot::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.15;
+        }
+        .rmstem { width: 1px; height: 22px; opacity: 0.25; }
+        .rmcard {
+            width: calc(100% - 16px);
+            border-radius: 8px;
+            padding: 11px 13px 13px;
+            border: 1px solid #e2e8f0;
+            border-left-width: 3px;
+            background: #f8fafc;
+            transition: border-color 0.15s;
+        }
+        .rmq {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            margin-bottom: 7px;
+        }
+        .rmev {
+            display: block;
+            font-size: 12px;
+            color: #334155;
+            line-height: 1.6;
+        }
+        .rm-gap {
+            width: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 30px;
+        }
+        .rm-gap-line {
+            width: 1px;
+            flex: 1;
+            background: #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+    <div class="logo">
+        <div class="logo-icon">⬡</div>
+        <div class="logo-text">Arch<span>Sketch</span></div>
+    </div>
+
+    <div class="privacy-badge">🔒 no login · no memory · open source</div>
+
+    <div class="toolbar-divider"></div>
+
+    <div class="download-group">
+        <button class="btn" onclick="downloadSVG()" title="download as svg">↓ svg</button>
+        <button class="btn" onclick="downloadPNG()" title="download as png">↓ png</button>
+        <button class="btn" onclick="downloadMD()" title="download as markdown">↓ md</button>
+        <button class="btn" onclick="downloadHTML()" title="download as html">↓ html</button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <button class="btn" onclick="openFile()" title="open .md or .html file">^ open</button>
+    <button class="btn" onclick="loadExample()">⬡ example</button>
+    <button class="btn" onclick="clearEditor()">✕ clear</button>
+    <button class="btn" onclick="showHelp()">? syntax guide</button>
+    <input type="file" id="file-input" accept=".md,.html" style="display:none" onchange="handleFileOpen(event)">
+</div>
+
+<!-- MODE BAR -->
+<div class="modebar" id="modebar">
+    <button class="mode-btn active" data-mode="architecture" onclick="setMode('architecture')">⬡ block diagram</button>
+    <div class="modebar-sep"></div>
+    <button class="mode-btn" data-mode="sequence"   onclick="setMode('sequence')">sequence</button>
+    <button class="mode-btn" data-mode="class"      onclick="setMode('class')">class</button>
+    <button class="mode-btn" data-mode="state"      onclick="setMode('state')">state</button>
+    <button class="mode-btn" data-mode="activity"   onclick="setMode('activity')">activity</button>
+    <button class="mode-btn" data-mode="usecase"    onclick="setMode('usecase')">usecase</button>
+    <button class="mode-btn" data-mode="component"  onclick="setMode('component')">component</button>
+    <button class="mode-btn" data-mode="deployment" onclick="setMode('deployment')">deployment</button>
+    <button class="mode-btn" data-mode="flowchart"  onclick="setMode('flowchart')">flowchart</button>
+    <button class="mode-btn" data-mode="er"         onclick="setMode('er')">er</button>
+    <button class="mode-btn" data-mode="gantt"      onclick="setMode('gantt')">gantt</button>
+    <button class="mode-btn" data-mode="mindmap"    onclick="setMode('mindmap')">mindmap</button>
+    <button class="mode-btn" data-mode="timing"     onclick="setMode('timing')">timing</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+    <!-- EDITOR PANE -->
+    <div class="editor-pane" id="editor-pane">
+        <div class="pane-header">
+            <div class="pane-dot" style="background:#58a6ff"></div>
+            diagram code
+        </div>
+        <div class="editor-wrapper">
+            <div class="line-numbers" id="line-numbers"><span>1</span></div>
+            <textarea id="code-editor" spellcheck="false"
+                placeholder="// type your architecture here&#10;// example:&#10;device [edge router] color sky-blue&#10;service [api gateway] color teal&#10;database [config db] color light-grey&#10;&#10;edge router -> api gateway : https&#10;api gateway -> config db : query"></textarea>
+        </div>
+        <div class="error-panel" id="error-panel"></div>
+    </div>
+
+    <!-- RESIZER -->
+    <div class="resizer" id="resizer"></div>
+
+    <!-- PREVIEW PANE -->
+    <div class="preview-pane">
+        <div class="pane-header">
+            <div class="pane-dot" style="background:#3fb950"></div>
+            diagram preview
+            <span id="mode-badge" class="mode-badge"></span>
+            <div class="dir-toggle" id="dir-toggle">
+                <button class="dir-btn active" id="dir-td" onclick="setFlowDir('TD')" title="top to bottom">↓ top-bottom</button>
+                <button class="dir-btn" id="dir-lr" onclick="setFlowDir('LR')" title="left to right">→ left-right</button>
+            </div>
+            <div class="zoom-controls">
+                <button class="zoom-btn" onclick="zoomOut()" title="zoom out">&#8722;</button>
+                <span id="zoom-level">100%</span>
+                <button class="zoom-btn" onclick="zoomIn()" title="zoom in">+</button>
+                <button class="zoom-btn reset" onclick="zoomReset()" title="reset zoom">reset</button>
+            </div>
+            <span style="margin-left:auto;font-size:11px;opacity:0.5" id="diagram-info"></span>
+        </div>
+        <div class="preview-wrapper">
+            <div id="diagram-output">
+                <div class="empty-state">
+                    <div class="empty-icon">⬡</div>
+                    <h3>your diagram appears here</h3>
+                    <p>start typing architecture code on the left. diagrams render in real time.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="statusbar" id="statusbar">
+    <span>⬡ archsketch v1.0</span>
+    <span id="status-lines">lines: 0</span>
+    <span id="status-nodes">nodes: 0</span>
+    <span id="status-errors">✓ no errors</span>
+    <span class="right">everything lowercase · spelling sensitive · no data stored</span>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay" id="help-modal" onclick="hideHelp(event)">
+    <div class="modal">
+        <h2>
+            ⬡ archsketch — syntax guide
+            <button class="modal-close" onclick="hideHelp()">✕</button>
+        </h2>
+
+        <!-- ARCHITECTURE MODE -->
+        <h3>architecture mode — components</h3>
+        <p class="help-intro">Six typed components. Name goes in square brackets. All attributes (color, font, style) are optional.</p>
+        <table class="help-table">
+            <tr><th>keyword</th><th>shape</th><th>full syntax</th></tr>
+            <tr><td>device</td><td>rounded box</td><td>device [edge router] color sky-blue font calibri bold</td></tr>
+            <tr><td>service</td><td>rectangle</td><td>service [api gateway] color teal font verdana italic</td></tr>
+            <tr><td>database</td><td>cylinder</td><td>database [config db] color dark-blue</td></tr>
+            <tr><td>queue</td><td>stadium / pill</td><td>queue [event bus] color yellow font calibri underline</td></tr>
+            <tr><td>cloud</td><td>cloud shape</td><td>cloud [cdn edge] color mint</td></tr>
+            <tr><td>actor</td><td>oval</td><td>actor [end user] color light-purple</td></tr>
+        </table>
+
+        <h3>architecture mode — connections</h3>
+        <pre>edge router -> api gateway : https           // solid arrow with label
+api gateway --> config db : query            // dashed arrow (async / optional)
+a -> b -> c -> d : label                     // chained — label applies to last segment
+service [standalone]                         // node with no connections</pre>
+
+        <h3>architecture mode — groups</h3>
+        <pre>group [backend zone] color light-grey
+  service [api gateway]
+  database [config db]
+  group [inner cluster] color light-blue     // groups can nest
+    service [cache]
+  end
+end</pre>
+        <div class="rule-item">group color applies as a background fill</div>
+        <div class="rule-item">components inside a group still need to be declared — the group positions them</div>
+
+        <h3>architecture mode — fonts and styles</h3>
+        <pre>device [router] font calibri bold
+service [api] font verdana italic underline
+actor [user] font comic-sans strikethrough bold</pre>
+        <table class="help-table">
+            <tr><th>fonts</th><th>styles (combinable in any order)</th></tr>
+            <tr><td>calibri · verdana · comic-sans</td><td>bold · italic · underline · strikethrough</td></tr>
+        </table>
+
+        <!-- UML / MERMAID MODE -->
+        <h3>diagram type declaration</h3>
+        <pre>diagramtype|block       // block diagram (native archsketch — optional, added by default on export)
+diagramtype|sequence    // sequence diagram — rest of file is native Mermaid syntax
+diagramtype|er          // any other supported type works the same way</pre>
+        <div class="rule-item">block diagram mode works with or without the declaration — it is the default when no diagramtype line is present</div>
+        <div class="rule-item">archsketch validation (lowercase, colour names, etc.) is skipped in all UML modes</div>
+        <div class="rule-item">click any mode button in the bar to load a full real-life example for that type</div>
+
+        <!-- SEQUENCE -->
+        <h3>sequence — arrows and messages</h3>
+        <pre>participant Alice as Alice (user)    // declare with display alias
+actor Bob                            // actor renders as a person shape
+
+Alice->>Bob: sync call               // solid line, filled arrowhead
+Bob-->>Alice: reply                  // dashed line (response)
+Alice-)Bob: fire and forget          // open async arrow
+Bob-xAlice: timeout / error          // X at receiver
+Alice->>+Bob: call (activate)        // + activates lifebar
+Bob-->>-Alice: reply (deactivate)    // - deactivates lifebar</pre>
+
+        <h3>sequence — create and destroy participants</h3>
+        <pre>create participant Session           // participant appears mid-diagram
+Alice->>Session: init(userId)
+create actor Auditor as Audit Log   // create an actor mid-flow
+Session->>Auditor: write entry
+destroy Session                     // participant removed with X mark
+Alice->>Session: token expired      // shown with X through lifeline
+destroy Auditor</pre>
+        <div class="rule-item">create and destroy work exactly as on sequencediagram.org — participants can appear and disappear mid-flow</div>
+        <div class="rule-item">destroy draws an X through the lifeline at that point</div>
+
+        <h3>sequence — blocks and grouping</h3>
+        <pre>loop Retry up to 3 times            // repeat block
+    Alice->>Bob: ping
+end
+
+alt success                         // conditional — first branch
+    Bob-->>Alice: 200 OK
+else failure
+    Bob-->>Alice: 500 Error
+end
+
+opt if feature flag is on           // optional block
+    Alice->>Feature: check
+end
+
+par thread 1                        // parallel flows
+    Alice->>Log: write
+and thread 2
+    Alice->>Cache: warm
+end
+
+break on circuit breaker open       // early exit
+    Alice-->>User: 503
+end
+
+critical acquire lock               // mutual exclusion
+    Alice->>DB: update
+option timeout
+    Alice-->>User: retry
+end</pre>
+
+        <h3>sequence — notes, partitions and refs</h3>
+        <pre>note over Alice,Bob: TLS 1.3        // note spanning participants (mustard)
+note right of Bob: rate limited     // note on one side
+note left of Alice: initiator
+
+rect rgb(220, 220, 240)             // shaded partition region
+    Alice->>Bob: scoped calls
+end
+
+ref over Alice,Bob: Authentication flow   // reference to another diagram</pre>
+        <div class="rule-item">forward arrows render black · backward arrows render teal</div>
+        <div class="rule-item">alt / opt / break / critical blocks highlight light-red</div>
+
+        <!-- CLASS -->
+        <h3>class — defining classes</h3>
+        <pre>classDiagram
+    class Animal {
+        +String name
+        #int age
+        -String dna
+        +makeSound() String
+        #breathe() void
+    }
+    class Dog {
+        +String breed
+        +fetch(item String) bool
+    }
+    class &lt;&lt;interface&gt;&gt; Serializable {
+        +serialize() String
+    }</pre>
+        <div class="rule-item">visibility: + public · # protected · - private · ~ package</div>
+
+        <h3>class — relationships</h3>
+        <pre>Animal &lt;|-- Dog          // inheritance (Dog extends Animal)
+Animal &lt;|.. Serializable  // implementation (dashed)
+Dog *-- Collar             // composition (filled diamond)
+Person o-- Address         // aggregation (open diamond)
+Car --> Engine             // association (directed)
+Driver -- Car              // link (undirected)
+Dog ..> Treat              // dependency (dashed arrow)
+
+Dog "1" --> "0..*" Owner   // with multiplicity labels
+note for Dog "Best animal" // attached note</pre>
+
+        <!-- STATE -->
+        <h3>state — transitions</h3>
+        <pre>stateDiagram-v2
+    [*] --> Idle             // initial transition
+    Idle --> Processing : submit
+    Processing --> Done : success
+    Processing --> Error : failure
+    Error --> Idle : retry
+    Done --> [*]             // final state
+
+    state Processing {       // composite (nested) state
+        [*] --> Validating
+        Validating --> Executing
+        Executing --> [*]
+    }
+
+    state Choice &lt;&lt;choice&gt;&gt;  // choice pseudostate
+    Idle --> Choice
+    Choice --> Fast : score &gt; 90
+    Choice --> Slow : score &lt;= 90
+
+    Sending --> Sending : keepalive   // self-transition
+    note right of Error: triggers alert</pre>
+
+        <!-- FLOWCHART -->
+        <h3>flowchart — node shapes</h3>
+        <pre>A[rectangle]
+B(rounded rectangle)
+C([stadium / pill])
+D[[subroutine]]
+E[(cylinder / database)]
+F((circle))
+G{diamond / decision}
+H{{hexagon}}
+I[/parallelogram/]
+J[\reverse parallelogram\]
+K>asymmetric]</pre>
+
+        <h3>flowchart — connections and subgraphs</h3>
+        <pre>A --> B                   // arrow
+A --- B                   // line (no arrow)
+A -->|label| B            // labelled arrow
+A -- label --> B          // labelled (alternate syntax)
+A ==> B                   // thick arrow
+A -.-> B                  // dotted arrow
+A -.->|label| B           // dotted with label
+
+subgraph Backend [Backend Services]
+    API --> DB
+    API --> Cache
+end
+subgraph Frontend
+    UI --> API
+end</pre>
+        <div class="rule-item">flowchart and activity / usecase / component / deployment all use this syntax</div>
+        <div class="rule-item">use the ↓ TD / → LR buttons in the preview header to flip direction</div>
+
+        <!-- ER -->
+        <h3>er — entities and attributes</h3>
+        <pre>erDiagram
+    CUSTOMER {
+        int id PK
+        string name
+        string email FK
+        date created_at
+    }
+    ORDER {
+        int id PK
+        int customer_id FK
+        float total
+        string status
+    }
+    PRODUCT {
+        int id PK
+        string name
+        float price
+    }</pre>
+
+        <h3>er — cardinality and relationships</h3>
+        <pre>CUSTOMER ||--o{ ORDER : places      // one customer, zero-or-many orders
+ORDER }o--|| PRODUCT : contains     // one-or-many orders, one product
+PERSON |o--o| ADDRESS : "lives at"  // zero-or-one on both sides
+
+%%  ||  exactly one       o|  zero or one
+%%  }|  one or more       }o  zero or more</pre>
+
+        <!-- GANTT -->
+        <h3>gantt — tasks and milestones</h3>
+        <pre>gantt
+    title sprint 12 plan
+    dateFormat YYYY-MM-DD
+    excludes weekends
+
+    section discovery
+        requirements    : done,    t1, 2024-01-02, 3d
+        spike           : active,  t2, after t1,   2d
+
+    section build
+        api endpoint    : crit,    t3, after t2,   5d
+        frontend        :          t4, after t2,   7d
+        integration     : crit,    t5, after t3,   3d
+
+    section release
+        go-live         : milestone, m1, after t5, 0d
+        hypercare       :            t6, after m1, 5d</pre>
+        <div class="rule-item">status values: done · active · crit · milestone (or leave blank)</div>
+        <div class="rule-item">after t1 = starts when task t1 ends · duration: 5d / 2w / 1h</div>
+
+        <!-- MINDMAP -->
+        <h3>mindmap — hierarchy and node shapes</h3>
+        <pre>mindmap
+    root((Central Topic))   // circle
+      Branch A
+        Leaf 1
+        Leaf 2
+      Branch B[Square node]  // square brackets = rectangle
+        Leaf 3
+          Deep leaf
+      Branch C(Rounded)      // parentheses = rounded
+      Branch D{{Hexagon}}    // hexagon</pre>
+        <div class="rule-item">indentation defines the hierarchy — each extra indent level = one level deeper</div>
+        <div class="rule-item">node shape is set by the brackets around the text: (( )) · [ ] · ( ) · {{ }}</div>
+
+        <!-- TIMING / ROADMAP -->
+        <h3>timing / roadmap — syntax</h3>
+        <pre>diagramtype|timing
+title digital transformation roadmap
+2024-Q1 : planning complete
+2024-Q2 : alpha release
+2024-Q3 : beta launch
+2024-Q4 : general availability
+2025-Q1 : v2 features shipped</pre>
+        <div class="rule-item">each line is: period : milestone label</div>
+        <div class="rule-item">items are grouped by the year prefix (YYYY) — each year gets its own colour band</div>
+        <div class="rule-item">period can be any string: 2024-Q1 · Jan · Phase 1 · Sprint 3</div>
+
+        <!-- COLOURS -->
+        <h3>colours — base · light-x · dark-x variants for each</h3>
+        <div class="color-grid" id="color-grid"></div>
+
+        <!-- IMPORT -->
+        <h3>import</h3>
+        <div class="rule-item">click "^ open" in the toolbar to open an existing .md or .html file</div>
+        <div class="rule-item">.md — extracts the first ```archsketch code block found in the file</div>
+        <div class="rule-item">.html — restores a previously exported standalone HTML diagram</div>
+        <div class="rule-item">parsing is done entirely in the browser — no file is sent to any server</div>
+
+        <!-- EXPORT -->
+        <h3>export</h3>
+        <table class="help-table">
+            <tr><th>button</th><th>format</th><th>best for</th></tr>
+            <tr><td>↓ svg</td><td>scalable vector</td><td>embedding in wikis, docs, presentations — scales without blur</td></tr>
+            <tr><td>↓ png</td><td>2× raster image</td><td>emails, slide decks, reports where vector is not accepted</td></tr>
+            <tr><td>↓ md</td><td>markdown source</td><td>committing to a repo — re-import later via "^ open"</td></tr>
+            <tr><td>↓ html</td><td>standalone page</td><td>sharing with anyone — no server, no archsketch install needed</td></tr>
+        </table>
+
+        <!-- RULES -->
+        <h3>validation rules (architecture mode only)</h3>
+        <div class="rule-item">everything must be lowercase — uppercase triggers an error on that line</div>
+        <div class="rule-item">component names must be in square brackets: device [my router]</div>
+        <div class="rule-item">spelling sensitive — typos show suggestions: "reed" is not a valid colour. try: red</div>
+        <div class="rule-item">comments start with // and are ignored by the parser</div>
+        <div class="rule-item">uml and mermaid modes skip archsketch validation — native mermaid rules apply</div>
+        <div class="rule-item">nothing ever leaves your machine · no login · no storage · no telemetry</div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+
+// ============================================================
+// COLOUR PALETTE
+// ============================================================
+const COLOURS = {
+    'red':'#E53E3E','light-red':'#FEB2B2','dark-red':'#9B2C2C',
+    'blue':'#3182CE','light-blue':'#BEE3F8','dark-blue':'#2A4365',
+    'green':'#38A169','light-green':'#C6F6D5','dark-green':'#276749',
+    'teal':'#319795','light-teal':'#B2F5EA','dark-teal':'#234E52',
+    'yellow':'#ECC94B','light-yellow':'#FEFCBF','dark-yellow':'#B7791F',
+    'mustard':'#D69E2E','light-mustard':'#FAF089','dark-mustard':'#975A16',
+    'grey':'#718096','light-grey':'#E2E8F0','dark-grey':'#2D3748',
+    'sky-blue':'#63B3ED','light-sky-blue':'#EBF8FF','dark-sky-blue':'#2C5282',
+    'cyan':'#00B5D8','light-cyan':'#C4F1F9','dark-cyan':'#065666',
+    'purple':'#805AD5','light-purple':'#E9D8FD','dark-purple':'#44337A',
+    'coral':'#FC8181','light-coral':'#FED7D7','dark-coral':'#C53030',
+    'mint':'#68D391','light-mint':'#F0FFF4','dark-mint':'#22543D',
+    'lavender':'#B794F4','light-lavender':'#FAF5FF','dark-lavender':'#553C9A',
+    'peach':'#FBD38D','light-peach':'#FFFAF0','dark-peach':'#C05621',
+    'slate':'#4A5568','light-slate':'#F7FAFC','dark-slate':'#1A202C',
+    'white':'#FFFFFF','black':'#1A202C'
+};
+
+const FONTS = ['calibri','verdana','comic-sans'];
+const STYLES = ['bold','italic','underline','strikethrough'];
+const COMP_TYPES = ['device','service','database','queue','cloud','actor'];
+
+const UML_VALID_TYPES = ['sequence','class','state','activity','usecase','component','deployment','flowchart','er','gantt','mindmap','timing'];
+const UML_TYPE_MAP = {
+    'sequence':   'sequenceDiagram',
+    'class':      'classDiagram',
+    'state':      'stateDiagram-v2',
+    'activity':   'flowchart TD',
+    'usecase':    'flowchart LR',
+    'component':  'flowchart TD',
+    'deployment': 'flowchart TD',
+    'flowchart':  'flowchart TD',
+    'er':         'erDiagram',
+    'gantt':      'gantt',
+    'mindmap':    'mindmap',
+    'timing':     'timeline',
+};
+
+// ============================================================
+// HELPERS
+// ============================================================
+function isLight(hex) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return (r*0.299 + g*0.587 + b*0.114) > 155;
+}
+
+function darkenHex(hex, amount=40) {
+    const r = Math.max(0, parseInt(hex.slice(1,3),16)-amount);
+    const g = Math.max(0, parseInt(hex.slice(3,5),16)-amount);
+    const b = Math.max(0, parseInt(hex.slice(5,7),16)-amount);
+    return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+}
+
+function safeId(name) {
+    return name.trim().toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_');
+}
+
+function suggest(input, list) {
+    return list.find(item => {
+        const a = input.replace(/-/g,'');
+        const b = item.replace(/-/g,'');
+        let matches = 0;
+        for (let i=0; i<Math.min(a.length,b.length); i++) if(a[i]===b[i]) matches++;
+        return matches >= Math.min(a.length,b.length)*0.7;
+    });
+}
+
+function detectMode(code) {
+    const first = code.trim().split('\n')[0].trim();
+    const m = first.match(/^diagramtype\|(.+)$/);
+    if (!m) return 'architecture';
+    const type = m[1].trim().toLowerCase();
+    return type === 'block' ? 'architecture' : type;
+}
+
+// ============================================================
+// PARSER
+// ============================================================
+function parse(code) {
+    const lines = code.split('\n');
+    const errors = [];
+    const nodes = {};
+    const edges = [];
+
+    for (let i=0; i<lines.length; i++) {
+        const ln = i+1;
+        const line = lines[i].trim();
+        if (!line || line.startsWith('//')) continue;
+        if (line.startsWith('diagramtype|')) continue;
+
+        // Uppercase check
+        if (line !== line.toLowerCase()) {
+            errors.push(`line ${ln}: contains uppercase letters. everything must be lowercase.`);
+            continue;
+        }
+
+        // Component definition
+        const compRx = /^(device|service|database|queue|cloud|actor)\s+\[([^\]]+)\](.*)?$/;
+        const cm = line.match(compRx);
+        if (cm) {
+            const type = cm[1];
+            const name = cm[2].trim();
+            const rest = cm[3] || '';
+
+            // color
+            const colorM = rest.match(/color\s+([\w-]+)/);
+            let color = colorM ? colorM[1] : 'blue';
+            if (!COLOURS[color]) {
+                const s = suggest(color, Object.keys(COLOURS));
+                errors.push(`line ${ln}: "${color}" is not a valid colour.${s?' try: '+s:''}`);
+                color = 'blue';
+            }
+
+            // font
+            const fontM = rest.match(/font\s+([\w-]+)(.*)?/);
+            let font = 'calibri';
+            // strip "color <value>" so the colour token never reaches the keyword checker
+            let styleStr = rest.replace(/\bcolor\s+[\w-]+\b/, '').trim();
+            if (fontM) {
+                font = fontM[1];
+                styleStr = (fontM[2] || '').replace(/\bcolor\s+[\w-]+\b/, '').trim();
+                if (!FONTS.includes(font)) {
+                    const s = suggest(font, FONTS);
+                    errors.push(`line ${ln}: "${font}" is not a valid font. valid: calibri | verdana | comic-sans.${s?' try: '+s:''}`);
+                    font = 'calibri';
+                }
+            }
+
+            // styles — only bold/italic/underline/strikethrough should remain in styleStr now
+            const foundStyles = STYLES.filter(s => new RegExp('\\b'+s+'\\b').test(styleStr));
+            const words = styleStr.trim().split(/\s+/).filter(w => w && !STYLES.includes(w) && w !== 'font' && w !== font);
+            words.forEach(w => {
+                if (w) errors.push(`line ${ln}: "${w}" is not a recognised keyword.`);
+            });
+
+            const id = safeId(name);
+            nodes[id] = { type, name, color, font, styles: foundStyles, id };
+            continue;
+        }
+
+        // Connection line
+        if (line.includes('->')) {
+            const dashed = line.includes('-->');
+            const arrow = dashed ? /-->/ : /->/;
+            const segments = line.split(arrow).map(s=>s.trim());
+
+            for (let p=0; p<segments.length-1; p++) {
+                const from = segments[p];
+                let to = segments[p+1];
+                let label = '';
+                const labelM = to.match(/^(.+?)\s*:\s*(.+)$/);
+                if (labelM) { to = labelM[1].trim(); label = labelM[2].trim(); }
+
+                const fid = safeId(from);
+                const tid = safeId(to);
+                if (!nodes[fid]) nodes[fid] = {type:'service',name:from,color:'blue',font:'calibri',styles:[],id:fid};
+                if (!nodes[tid]) nodes[tid] = {type:'service',name:to,color:'blue',font:'calibri',styles:[],id:tid};
+                edges.push({ from:fid, to:tid, label, dashed });
+            }
+            continue;
+        }
+
+        // Unknown line
+        if (line.length > 1) {
+            errors.push(`line ${ln}: unrecognised syntax. check spelling or start with: device | service | database | queue | cloud | actor`);
+        }
+    }
+
+    return { nodes, edges, errors, nodeCount: Object.keys(nodes).length };
+}
+
+// ============================================================
+// SEQUENCE DIAGRAM POST-PROCESSOR
+// ============================================================
+function postProcessSequenceSVG(container) {
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+
+    let defs = svg.querySelector('defs');
+    if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svg.insertBefore(defs, svg.firstChild);
+    }
+
+    function makeMarker(id, fill) {
+        if (defs.querySelector('#' + id)) return;
+        const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        m.setAttribute('id', id);
+        m.setAttribute('markerWidth', '10');
+        m.setAttribute('markerHeight', '7');
+        m.setAttribute('refX', '9');
+        m.setAttribute('refY', '3.5');
+        m.setAttribute('orient', 'auto');
+        const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        p.setAttribute('d', 'M 0 0 L 10 3.5 L 0 7 Z');
+        p.setAttribute('fill', fill);
+        m.appendChild(p);
+        defs.appendChild(m);
+    }
+
+    makeMarker('as-arrow-black', '#1a202c');
+    makeMarker('as-arrow-teal', '#319795');
+
+    // Color arrows by direction — use style (beats Mermaid CSS), cover both line and path
+    const arrowSel = [
+        'line.messageLine0', 'line.messageLine1',
+        'path.messageLine0', 'path.messageLine1',
+    ].join(',');
+
+    svg.querySelectorAll(arrowSel).forEach(el => {
+        let x1 = 0, x2 = 0;
+        if (el.tagName.toLowerCase() === 'line') {
+            x1 = parseFloat(el.getAttribute('x1') || '0');
+            x2 = parseFloat(el.getAttribute('x2') || '0');
+        } else {
+            const nums = (el.getAttribute('d') || '').match(/[\d.]+/g) || [];
+            x1 = nums[0] ? parseFloat(nums[0]) : 0;
+            x2 = nums[2] ? parseFloat(nums[2]) : 0;
+        }
+
+        const backward = x2 - x1 < -10;
+        const color    = backward ? '#319795' : '#1a202c';
+        const markerId = backward ? 'as-arrow-teal' : 'as-arrow-black';
+
+        el.style.stroke      = color;
+        el.style.strokeWidth = '1.5px';
+        el.style.fill        = 'none';
+        if (el.hasAttribute('marker-end')) {
+            el.setAttribute('marker-end', 'url(#' + markerId + ')');
+        }
+    });
+
+    // Note over / left / right — mustard, square corners
+    svg.querySelectorAll('rect.note').forEach(r => {
+        r.style.fill        = '#D69E2E';
+        r.style.stroke      = '#975A16';
+        r.style.strokeWidth = '1.5px';
+        r.setAttribute('rx', '0');
+        r.setAttribute('ry', '0');
+    });
+    svg.querySelectorAll('.noteText, text.noteText').forEach(t => {
+        t.style.fill = '#1a202c';
+    });
+
+    // Label boxes: loop/par/critical = black; alt/opt/break = light-red
+    svg.querySelectorAll('rect.labelBox').forEach(r => {
+        const g      = r.closest('g');
+        const textEl = g ? g.querySelector('text') : null;
+        const label  = (textEl ? textEl.textContent : '').trim().toLowerCase();
+        if (label.startsWith('alt') || label.startsWith('opt') || label.startsWith('break')) {
+            r.style.fill   = '#FEB2B2';
+            r.style.stroke = '#E53E3E';
+            if (textEl) textEl.style.fill = '#9B2C2C';
+        } else {
+            r.style.fill   = '#1a202c';
+            r.style.stroke = '#1a202c';
+            if (textEl) textEl.style.fill = '#ffffff';
+        }
+    });
+
+    // Partitions (rect...end) — grey dashed border
+    svg.querySelectorAll('rect.rect').forEach(r => {
+        r.style.fill            = 'rgba(113,128,150,0.10)';
+        r.style.stroke          = '#718096';
+        r.style.strokeDasharray = '5,3';
+    });
+
+    // Actor keyword participants — oval (high rx/ry)
+    svg.querySelectorAll('g.actor > rect').forEach(r => {
+        const h  = parseFloat(r.getAttribute('height') || '30');
+        const rx = Math.round(h / 2);
+        r.setAttribute('rx', String(rx));
+        r.setAttribute('ry', String(rx));
+    });
+}
+
+// ============================================================
+// GENERIC MERMAID POST-PROCESSOR (all UML types)
+// ============================================================
+function postProcessMermaidSVG(container, mode) {
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+
+    // Remove injected background rect (only when it spans the full SVG area)
+    svg.querySelectorAll('rect.background, rect#background').forEach(r => {
+        const svgW = parseFloat(svg.getAttribute('width') || '0');
+        const rW   = parseFloat(r.getAttribute('width')   || '0');
+        if (!svgW || rW >= svgW * 0.9) r.remove();
+    });
+
+    svg.style.fontFamily = 'Calibri, Verdana, sans-serif';
+    svg.style.display    = 'block';
+
+    // Flowchart edges (activity / usecase / component / deployment / flowchart)
+    svg.querySelectorAll([
+        'path.flowchart-link',
+        'path.edge-thickness-normal',
+        'path.edge-thickness-thick',
+        '.edgePath path',
+    ].join(',')).forEach(el => {
+        el.style.fill = 'none';
+        if (!el.style.stroke) el.style.stroke = '#4A5568';
+        if (!el.style.strokeWidth) el.style.strokeWidth = '1.5px';
+    });
+
+    // Class diagram relations
+    svg.querySelectorAll('path.relation, line.relation').forEach(el => {
+        el.style.fill = 'none';
+        if (!el.style.stroke) el.style.stroke = '#4A5568';
+    });
+
+    // ER diagram relationship lines
+    svg.querySelectorAll('path.er.relationshipLine, line.er.relationshipLine').forEach(el => {
+        el.style.fill = 'none';
+        if (!el.style.stroke) el.style.stroke = '#4A5568';
+    });
+
+    // State diagram transitions
+    svg.querySelectorAll('path.transition').forEach(el => {
+        el.style.fill = 'none';
+        if (!el.style.stroke) el.style.stroke = '#4A5568';
+    });
+
+    // Mindmap / timeline edges
+    svg.querySelectorAll('path.mindmap-link, line.mindmap-link').forEach(el => {
+        el.style.fill = 'none';
+        if (!el.style.stroke) el.style.stroke = '#4A5568';
+    });
+
+    // Gantt — force text visible (white text on white section bg is invisible)
+    if (mode === 'gantt') {
+        svg.querySelectorAll('.taskText, .taskTextOutsideRight, .taskTextOutsideLeft').forEach(t => {
+            t.style.fill = '#ffffff';
+            t.style.fontWeight = 'bold';
+        });
+        svg.querySelectorAll('.sectionTitle').forEach(t => {
+            t.style.fill = '#2A4365';
+            t.style.fontWeight = '600';
+        });
+        svg.querySelectorAll('text.titleText').forEach(t => {
+            t.style.fill = '#1a202c';
+            t.style.fontSize = '15px';
+            t.style.fontWeight = 'bold';
+        });
+        // Ensure task bars are opaque
+        svg.querySelectorAll('rect.task, rect.active, rect.crit, rect.done').forEach(r => {
+            r.style.opacity = '1';
+        });
+        // Grid tick labels
+        svg.querySelectorAll('.tick text').forEach(t => {
+            t.style.fill = '#4A5568';
+        });
+        // Grid lines
+        svg.querySelectorAll('.grid .tick line, .grid path').forEach(l => {
+            l.style.stroke = '#E2E8F0';
+        });
+    }
+}
+
+// ============================================================
+// MERMAID CONVERTER
+// ============================================================
+function toMermaid(parsed) {
+    const { nodes, edges } = parsed;
+    let mmd = 'flowchart TD\n';
+
+    for (const [id, n] of Object.entries(nodes)) {
+        const fill = COLOURS[n.color] || '#3182CE';
+        const text = isLight(fill) ? '#1a202c' : '#ffffff';
+        const stroke = darkenHex(fill, 30);
+
+        let label = n.name;
+        if (n.styles.includes('bold')) label = `<b>${label}</b>`;
+        if (n.styles.includes('italic')) label = `<i>${label}</i>`;
+        if (n.styles.includes('strikethrough')) label = `<s>${label}</s>`;
+
+        let shape;
+        switch(n.type) {
+            case 'database': shape = `[("${label}")]`; break;
+            case 'queue':    shape = `[/"${label}"\\]`; break;
+            case 'cloud':    shape = `("${label}")`; break;
+            case 'actor':    shape = `>"${label}"]`; break;
+            default:         shape = `["${label}"]`;
+        }
+
+        mmd += `    ${id}${shape}\n`;
+        mmd += `    style ${id} fill:${fill},color:${text},stroke:${stroke},stroke-width:1.5px\n`;
+    }
+
+    for (const e of edges) {
+        const arr = e.dashed ? '-.->' : '-->';
+        const lbl = e.label ? `|"${e.label}"|` : '';
+        mmd += `    ${e.from} ${arr}${lbl} ${e.to}\n`;
+    }
+
+    return mmd;
+}
+
+// ============================================================
+// MERMAID INIT
+// ============================================================
+mermaid.initialize({
+    startOnLoad: false,
+    theme: 'base',
+    themeVariables: {
+        // General
+        background:           '#ffffff',
+        primaryColor:         '#3182CE',
+        primaryTextColor:     '#ffffff',
+        primaryBorderColor:   '#2A4365',
+        secondaryColor:       '#EBF8FF',
+        tertiaryColor:        '#E2E8F0',
+        lineColor:            '#4A5568',
+        textColor:            '#1a202c',
+        fontSize:             '14px',
+        fontFamily:           'Calibri, Verdana, sans-serif',
+        // Sequence
+        actorBkg:             '#3182CE',
+        actorBorder:          '#2A4365',
+        actorTextColor:       '#ffffff',
+        actorLineColor:       '#4A5568',
+        signalColor:          '#1a202c',
+        signalTextColor:      '#1a202c',
+        labelBoxBkgColor:     '#1a202c',
+        labelBoxBorderColor:  '#1a202c',
+        labelTextColor:       '#ffffff',
+        loopTextColor:        '#ffffff',
+        noteBorderColor:      '#975A16',
+        noteBkgColor:         '#D69E2E',
+        noteTextColor:        '#1a202c',
+        activationBorderColor:'#4A5568',
+        activationBkgColor:   '#BEE3F8',
+        // Class
+        classText:            '#1a202c',
+        // ER
+        attributeBackgroundColorEven: '#EBF8FF',
+        attributeBackgroundColorOdd:  '#ffffff',
+        // Gantt
+        taskBkgColor:         '#3182CE',
+        taskBorderColor:      '#2A4365',
+        taskTextColor:        '#ffffff',
+        taskTextLightColor:   '#ffffff',
+        taskTextOutsideColor: '#1a202c',
+        taskTextClickableColor:'#1a202c',
+        gridColor:            '#E2E8F0',
+        section0:             '#EBF8FF',
+        section1:             '#BEE3F8',
+        altSectionColor:      '#F7FAFC',
+        activeTaskBkgColor:   '#319795',
+        activeTaskBorderColor:'#234E52',
+        critBkgColor:         '#E53E3E',
+        critBorderColor:      '#9B2C2C',
+        todayLineColor:       '#E53E3E',
+        // Mindmap / timeline
+        edgeLabelBackground:  '#ffffff',
+    },
+    flowchart: {
+        htmlLabels:  true,
+        curve:       'basis',
+        padding:     24,
+        nodeSpacing: 50,
+        rankSpacing: 60,
+    },
+    sequence: {
+        actorMargin:     60,
+        width:           150,
+        height:          65,
+        boxMargin:       10,
+        mirrorActors:    true,
+        useMaxWidth:     false,
+        wrap:            true,
+    },
+    gantt: {
+        titleTopMargin:       25,
+        barHeight:            22,
+        barGap:               4,
+        topPadding:           50,
+        leftPadding:          80,
+        gridLineStartPadding: 35,
+        fontSize:             12,
+        numberSectionStyles:  4,
+    },
+});
+
+// ============================================================
+// RENDER
+// ============================================================
+let renderTimer = null;
+
+async function render() {
+    const code = document.getElementById('code-editor').value;
+    const output = document.getElementById('diagram-output');
+    const errorPanel = document.getElementById('error-panel');
+    const statusbar = document.getElementById('statusbar');
+    const modeBadge = document.getElementById('mode-badge');
+    const diagramInfo = document.getElementById('diagram-info');
+
+    if (!code.trim()) {
+        output.innerHTML = `<div class="empty-state">
+            <div class="empty-icon">⬡</div>
+            <h3>your diagram appears here</h3>
+            <p>start typing architecture code on the left. diagrams render in real time.</p>
+        </div>`;
+        errorPanel.innerHTML = '';
+        errorPanel.classList.remove('visible');
+        statusbar.classList.remove('has-errors');
+        modeBadge.style.display = 'none';
+        diagramInfo.textContent = '';
+        updateStatus(0, 0, 0);
+        return;
+    }
+
+    const mode = detectMode(code);
+    const lines = code.split('\n');
+
+    if (mode !== 'architecture') {
+        errorPanel.innerHTML = '';
+        errorPanel.classList.remove('visible');
+        statusbar.classList.remove('has-errors');
+        updateStatus(lines.length, 0, 0);
+
+        if (!UML_VALID_TYPES.includes(mode)) {
+            modeBadge.textContent = 'unknown type: ' + mode;
+            modeBadge.classList.add('error');
+            modeBadge.style.display = 'inline-flex';
+            output.innerHTML = `<div class="empty-state">
+                <div class="empty-icon" style="color:#f85149">⚠</div>
+                <h3 style="color:#f85149">unknown diagram type: ${mode}</h3>
+                <p>valid types: ${UML_VALID_TYPES.join(' · ')}</p>
+            </div>`;
+            diagramInfo.textContent = '';
+            return;
+        }
+
+        modeBadge.classList.remove('error');
+        modeBadge.textContent = 'mode: ' + mode + ' diagram';
+        modeBadge.style.display = 'inline-flex';
+
+        const dirToggle = document.getElementById('dir-toggle');
+        dirToggle.style.display = mode === 'flowchart' ? 'flex' : 'none';
+
+        if (mode === 'timing') {
+            renderRoadmap(code, output);
+            resetZoomDisplay();
+            diagramInfo.textContent = 'roadmap';
+            return;
+        }
+
+        const mmdHeader = mode === 'flowchart'
+            ? 'flowchart ' + flowchartDir
+            : UML_TYPE_MAP[mode];
+        const mmdBody = lines.slice(1).join('\n').trim();
+
+        if (!mmdBody) {
+            output.innerHTML = `<div class="empty-state">
+                <div class="empty-icon">⬡</div>
+                <h3>ready for ${mode} diagram</h3>
+                <p>add diagram code below the diagramtype line, or click ⬡ example for a sample.</p>
+            </div>`;
+            diagramInfo.textContent = '';
+            return;
+        }
+
+        const mmd = mmdHeader + '\n' + mmdBody;
+        try {
+            const uid = 'uml_' + Date.now();
+            const { svg } = await mermaid.render(uid, mmd);
+            output.innerHTML = svg;
+            postProcessMermaidSVG(output, mode);
+            if (mode === 'sequence') postProcessSequenceSVG(output);
+            resetZoomDisplay();
+            diagramInfo.textContent = mode + ' diagram';
+        } catch(err) {
+            output.innerHTML = `<div class="empty-state">
+                <div class="empty-icon" style="color:#f85149">⚠</div>
+                <h3 style="color:#f85149">render error</h3>
+                <p>check your ${mode} diagram syntax</p>
+            </div>`;
+        }
+        return;
+    }
+
+    // Architecture / block diagram mode
+    modeBadge.style.display = 'none';
+    document.getElementById('dir-toggle').style.display = 'none';
+
+    const parsed = parse(code);
+
+    if (parsed.errors.length > 0) {
+        errorPanel.innerHTML = parsed.errors.map(e => `<div class="error-item">${e}</div>`).join('');
+        errorPanel.classList.add('visible');
+        statusbar.classList.add('has-errors');
+    } else {
+        errorPanel.innerHTML = '';
+        errorPanel.classList.remove('visible');
+        statusbar.classList.remove('has-errors');
+    }
+
+    updateStatus(lines.length, parsed.nodeCount, parsed.errors.length);
+
+    if (parsed.nodeCount === 0) return;
+
+    const mmd = toMermaid(parsed);
+
+    try {
+        const uid = 'arch_' + Date.now();
+        const { svg } = await mermaid.render(uid, mmd);
+        output.innerHTML = svg;
+        resetZoomDisplay();
+        diagramInfo.textContent = `${parsed.nodeCount} nodes · ${parsed.edges.length} connections`;
+    } catch(err) {
+        output.innerHTML = `<div class="empty-state">
+            <div class="empty-icon" style="color:#f85149">⚠</div>
+            <h3 style="color:#f85149">render error</h3>
+            <p>check syntax — all connections must reference defined components</p>
+        </div>`;
+    }
+}
+
+function updateStatus(lines, nodes, errors) {
+    document.getElementById('status-lines').textContent = `lines: ${lines}`;
+    document.getElementById('status-nodes').textContent = `nodes: ${nodes}`;
+    document.getElementById('status-errors').textContent =
+        errors > 0 ? `⚠ ${errors} error${errors>1?'s':''}` : '✓ no errors';
+}
+
+// ============================================================
+// EDITOR EVENTS
+// ============================================================
+const editor = document.getElementById('code-editor');
+
+editor.addEventListener('input', () => {
+    updateLineNumbers();
+    updateModeBar();
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(render, 350);
+});
+
+editor.addEventListener('scroll', () => {
+    document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+});
+
+editor.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = e.target.selectionStart, en = e.target.selectionEnd;
+        e.target.value = e.target.value.substring(0,s) + '  ' + e.target.value.substring(en);
+        e.target.selectionStart = e.target.selectionEnd = s + 2;
+        updateLineNumbers();
+    }
+});
+
+function updateLineNumbers() {
+    const lines = editor.value.split('\n').length;
+    document.getElementById('line-numbers').innerHTML =
+        Array.from({length:lines},(_,i)=>`<span>${i+1}</span>`).join('');
+    document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+}
+
+// ============================================================
+// DOWNLOADS
+// ============================================================
+function getSVG() {
+    return document.querySelector('#diagram-output svg');
+}
+
+function downloadSVG() {
+    const svg = getSVG();
+    if (!svg) { alert('no diagram yet. type some code first.'); return; }
+    const blob = new Blob([svg.outerHTML], {type:'image/svg+xml'});
+    trigger(URL.createObjectURL(blob), 'archsketch-diagram.svg');
+}
+
+function downloadPNG() {
+    const svg = getSVG();
+    if (!svg) { alert('no diagram yet. type some code first.'); return; }
+    const scale = 2;
+    const bbox = svg.getBoundingClientRect();
+    const canvas = document.createElement('canvas');
+    canvas.width = bbox.width * scale;
+    canvas.height = bbox.height * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([svg.outerHTML], {type:'image/svg+xml'}));
+    img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        trigger(canvas.toDataURL('image/png'), 'archsketch-diagram.png');
+        URL.revokeObjectURL(url);
+    };
+    img.src = url;
+}
+
+function downloadMD() {
+    const code = editor.value;
+    if (!code.trim()) { alert('nothing to download.'); return; }
+    const md = `# architecture diagram\n\n\`\`\`archsketch\n${code}\n\`\`\`\n\n> created with [archsketch](https://github.com/anuradhabose/archsketch) — privacy-first open source diagramming for architects\n`;
+    trigger(URL.createObjectURL(new Blob([md],{type:'text/markdown'})), 'archsketch-diagram.md');
+}
+
+function downloadHTML() {
+    const svg = getSVG();
+    if (!svg) { alert('no diagram yet. type some code first.'); return; }
+    const code = editor.value;
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>archsketch diagram</title>
+<style>body{margin:48px;font-family:Calibri,Verdana,sans-serif;background:#fff;color:#1a202c}
+h1{font-size:20px;font-weight:700;margin-bottom:28px;color:#2d3748}
+.diagram{padding:24px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:8px;display:inline-block}
+pre{margin-top:28px;background:#f7fafc;border:1px solid #e2e8f0;padding:16px;border-radius:6px;font-size:12px;line-height:1.7;overflow-x:auto}
+.footer{margin-top:20px;font-size:11px;color:#718096}</style></head>
+<body><h1>architecture diagram</h1>
+<div class="diagram">${svg.outerHTML}</div>
+<pre id="as-source">${code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+<div class="footer">created with archsketch — privacy-first open source architecture diagramming</div>
+</body></html>`;
+    trigger(URL.createObjectURL(new Blob([html],{type:'text/html'})), 'archsketch-diagram.html');
+}
+
+function trigger(url, filename) {
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+}
+
+// ============================================================
+// MODE BAR
+// ============================================================
+function setMode(type) {
+    editor.value = type === 'architecture' ? EXAMPLE : (UML_EXAMPLES[type] || 'diagramtype|' + type + '\n');
+    updateLineNumbers();
+    clearTimeout(renderTimer);
+    render();
+}
+
+function updateModeBar() {
+    const code = editor.value;
+    const mode = code.trim() ? detectMode(code) : 'architecture';
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
+    });
+}
+
+// ============================================================
+// FILE OPEN (.md / .html)
+// ============================================================
+function openFile() {
+    document.getElementById('file-input').click();
+}
+
+async function handleFileOpen(e) {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    let text;
+    try { text = await file.text(); }
+    catch { alert('could not read file.'); return; }
+
+    const code = file.name.endsWith('.html')
+        ? extractFromHTML(text)
+        : extractFromMD(text);
+
+    if (!code) {
+        alert('no archsketch diagram found in this file.\n\nexpected a .md file with a ```archsketch block, or an exported archsketch .html file.');
+        return;
+    }
+
+    editor.value = code;
+    updateLineNumbers();
+    updateModeBar();
+    clearTimeout(renderTimer);
+    render();
+}
+
+function extractFromMD(text) {
+    // normalise line endings — handles Windows CRLF from editors / email clients
+    const t = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const m = t.match(/```archsketch\n([\s\S]*?)\n```/);
+    return m ? m[1].trim() : '';
+}
+
+function extractFromHTML(text) {
+    // target only the source <pre> — the one that holds the archsketch code
+    const t = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const m = t.match(/<pre[^>]*id="as-source"[^>]*>([\s\S]*?)<\/pre>/i)
+           || t.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+    if (!m) return '';
+    return m[1]
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')   // & must be unescaped last
+        .trim();
+}
+
+// ============================================================
+// FLOWCHART DIRECTION
+// ============================================================
+let flowchartDir = 'TD';
+
+function setFlowDir(dir) {
+    flowchartDir = dir;
+    document.getElementById('dir-td').classList.toggle('active', dir === 'TD');
+    document.getElementById('dir-lr').classList.toggle('active', dir === 'LR');
+    clearTimeout(renderTimer);
+    render();
+}
+
+// ============================================================
+// ZOOM
+// ============================================================
+let diagramZoom = 1;
+
+function zoomIn()    { setDiagramZoom(diagramZoom + 0.15); }
+function zoomOut()   { setDiagramZoom(diagramZoom - 0.15); }
+function zoomReset() { setDiagramZoom(1); }
+
+function setDiagramZoom(level) {
+    diagramZoom = Math.min(4, Math.max(0.25, level));
+    const svg = document.querySelector('#diagram-output svg');
+    if (svg) applyZoomToSVG(svg);
+    const rm = document.querySelector('#diagram-output .rmw');
+    if (rm) {
+        rm.style.transform = `scale(${diagramZoom})`;
+        rm.style.transformOrigin = 'top left';
+        rm.parentElement.style.width = (rm.scrollWidth * diagramZoom) + 'px';
+        rm.parentElement.style.height = (rm.scrollHeight * diagramZoom) + 'px';
+    }
+    document.getElementById('zoom-level').textContent = Math.round(diagramZoom * 100) + '%';
+}
+
+function applyZoomToSVG(svg) {
+    const vb = svg.getAttribute('viewBox');
+    let w = 0, h = 0;
+    if (vb) {
+        const p = vb.trim().split(/[\s,]+/);
+        w = parseFloat(p[2]) || 0;
+        h = parseFloat(p[3]) || 0;
+    }
+    if (!w) w = parseFloat(svg.getAttribute('width'))  || 0;
+    if (!h) h = parseFloat(svg.getAttribute('height')) || 0;
+    if (w) svg.style.width  = (w * diagramZoom) + 'px';
+    if (h) svg.style.height = (h * diagramZoom) + 'px';
+}
+
+function resetZoomDisplay() {
+    diagramZoom = 1;
+    document.getElementById('zoom-level').textContent = '100%';
+}
+
+// ============================================================
+// CLEAR + EXAMPLE
+// ============================================================
+function clearEditor() {
+    if (editor.value && confirm('clear the diagram?')) {
+        editor.value = '';
+        updateLineNumbers();
+        render();
+    }
+}
+
+const EXAMPLE = `diagramtype|block
+// iot platform architecture
+// created with archsketch
+
+device [edge router] color sky-blue font calibri bold
+device [m2m device] color light-cyan
+
+service [api gateway] color teal font verdana bold
+service [iot broker] color dark-teal
+service [auth service] color purple
+
+database [config db] color dark-blue
+database [telemetry db] color dark-slate
+
+queue [event bus] color yellow
+cloud [dashboard] color mint font calibri italic
+
+// connections
+m2m device -> iot broker : mqtt tls
+edge router -> api gateway : https
+api gateway -> auth service : validate
+auth service --> api gateway : token
+api gateway -> iot broker : forward
+iot broker -> event bus : publish
+event bus -> telemetry db : store
+event bus -> dashboard : stream
+iot broker -> config db : read config`;
+
+const UML_EXAMPLES = {
+
+'sequence':
+`diagramtype|sequence
+participant Customer
+participant MobileBanking
+participant APIGateway
+participant FraudDetection
+participant CoreBanking
+actor ExternalBank
+
+note over Customer,MobileBanking: retail banking — fund transfer
+
+rect rgb(200,200,200)
+    Customer->>MobileBanking: initiate transfer £500
+    MobileBanking->>APIGateway: POST /transfers
+    APIGateway->>FraudDetection: screen transaction
+    note right of FraudDetection: ai risk scoring
+    alt high risk score
+        FraudDetection-->>APIGateway: blocked
+        APIGateway-->>MobileBanking: 403 transaction blocked
+        MobileBanking-->>Customer: transfer declined
+    else cleared
+        FraudDetection-->>APIGateway: risk score ok
+    end
+end
+
+create participant OTPService as OTP Service
+APIGateway->>OTPService: request 2FA OTP
+OTPService-->>Customer: SMS OTP code
+Customer->>APIGateway: submit OTP
+destroy OTPService
+
+loop retry on timeout (max 2 attempts)
+    APIGateway->>CoreBanking: debit source account
+    CoreBanking-->>APIGateway: debit confirmed
+end
+
+par settle and notify in parallel
+    APIGateway->>ExternalBank: SWIFT transfer instruction
+    ExternalBank-->>APIGateway: settlement confirmed
+and
+    APIGateway->>MobileBanking: push notification
+    MobileBanking-->>Customer: transfer complete
+end
+
+note over Customer,ExternalBank: funds settled`,
+
+'class':
+`diagramtype|class
+class Order {
+    +String orderId
+    +Date createdAt
+    +OrderStatus status
+    +Float totalAmount
+    +calculateTotal() Float
+    +cancel() void
+}
+class Customer {
+    +String customerId
+    +String email
+    +String tier
+    +getDiscountRate() Float
+}
+class Product {
+    +String sku
+    +String name
+    +Float price
+    +Int stockLevel
+    +isAvailable() Boolean
+}
+class OrderLine {
+    +Int quantity
+    +Float unitPrice
+    +getSubtotal() Float
+}
+class Payment {
+    +String paymentId
+    +String method
+    +Float amount
+    +PaymentStatus status
+    +process() Boolean
+}
+class Shipment {
+    +String trackingNumber
+    +Date dispatchDate
+    +String carrier
+    +ShipmentStatus status
+}
+Order "1" --> "1..*" OrderLine : contains
+OrderLine "*" --> "1" Product : references
+Customer "1" --> "0..*" Order : places
+Order "1" --> "1" Payment : settled by
+Order "1" --> "0..1" Shipment : dispatched as`,
+
+'state':
+`diagramtype|state
+[*] --> Draft : checkout started
+Draft --> PendingPayment : order confirmed
+PendingPayment --> PaymentFailed : payment declined
+PaymentFailed --> PendingPayment : customer retries
+PendingPayment --> Paid : payment authorised
+Paid --> Processing : warehouse notified
+Processing --> AwaitingStock : item out of stock
+AwaitingStock --> Processing : stock replenished
+Processing --> Shipped : dispatched
+Shipped --> OutForDelivery : with courier
+OutForDelivery --> Delivered : signed for
+OutForDelivery --> DeliveryFailed : no answer
+DeliveryFailed --> OutForDelivery : redelivery attempt
+Delivered --> Completed : 30 day window elapsed
+Delivered --> ReturnRequested : customer raises return
+ReturnRequested --> Refunded : return approved
+Refunded --> [*]
+Completed --> [*]
+Draft --> Cancelled : abandoned
+PendingPayment --> Cancelled : payment timeout
+Cancelled --> [*]`,
+
+'activity':
+`diagramtype|activity
+Start([incident detected]) --> Triage{severity?}
+Triage -->|P1 critical| Page[page on-call engineer]
+Triage -->|P2 high| Ticket[create ticket — 4hr SLA]
+Triage -->|P3 low| Backlog[add to backlog]
+Page --> Bridge[open war room bridge]
+Bridge --> Investigate[investigate root cause]
+Investigate --> Found{cause identified?}
+Found -->|no| Escalate[escalate to senior SRE]
+Escalate --> Investigate
+Found -->|yes| Mitigate[apply mitigation]
+Mitigate --> Restored{service restored?}
+Restored -->|no| Rollback[rollback deployment]
+Rollback --> Restored
+Restored -->|yes| Monitor[monitor for 30 min]
+Monitor --> Stable{stable?}
+Stable -->|no| Investigate
+Stable -->|yes| Postmortem[write post-mortem]
+Postmortem --> Actions[create follow-up actions]
+Actions --> Close([incident closed])
+Ticket --> Close
+Backlog --> Close`,
+
+'usecase':
+`diagramtype|usecase
+Customer(["Customer"]) --> UC1[View Account Balance]
+Customer --> UC2[Transfer Funds]
+Customer --> UC3[Pay Bills]
+Customer --> UC4[Apply for Loan]
+Customer --> UC5[View Statements]
+Customer --> UC6[Manage Cards]
+BranchStaff(["Branch Staff"]) --> UC7[Open New Account]
+BranchStaff --> UC8[Process Cash Deposit]
+BranchStaff --> UC9[Verify Customer Identity]
+RiskOfficer(["Risk Officer"]) --> UC10[Review Loan Application]
+RiskOfficer --> UC11[Flag Suspicious Activity]
+UC2 --> UC12[Verify OTP]
+UC4 --> UC9
+UC7 --> UC9`,
+
+'component':
+`diagramtype|component
+subgraph Client
+    Web["Web App"]
+    Mobile["Mobile App"]
+end
+subgraph Gateway
+    GW["API Gateway"]
+    Auth["Auth Service"]
+end
+subgraph Core Services
+    Orders["Order Service"]
+    Products["Product Service"]
+    Payments["Payment Service"]
+    Notify["Notification Service"]
+end
+subgraph Data
+    OrderDB[("Order DB")]
+    ProductDB[("Product DB")]
+    Cache[("Redis")]
+end
+subgraph External
+    PayGW["Payment Gateway"]
+    Email["Email Provider"]
+end
+Web --> GW
+Mobile --> GW
+GW --> Auth
+GW --> Orders
+GW --> Products
+GW --> Payments
+Orders --> OrderDB
+Orders --> Cache
+Products --> ProductDB
+Products --> Cache
+Payments --> PayGW
+Notify --> Email
+Orders --> Notify
+Payments --> Orders`,
+
+'deployment':
+`diagramtype|deployment
+subgraph AWS Cloud
+    subgraph VPC
+        subgraph Public Subnet
+            ALB["Application Load Balancer"]
+            NAT["NAT Gateway"]
+        end
+        subgraph Private Subnet
+            subgraph EKS Cluster
+                Ingress["Nginx Ingress"]
+                API["api-service x3 pods"]
+                Worker["worker-service x2 pods"]
+                Redis["redis-cluster"]
+            end
+            RDS[("RDS PostgreSQL multi-AZ")]
+            ES["ElasticSearch"]
+        end
+    end
+    S3["S3 Bucket"]
+    CF["CloudFront CDN"]
+    R53["Route 53"]
+end
+Internet(["Internet"]) --> R53
+R53 --> CF
+CF --> S3
+CF --> ALB
+ALB --> Ingress
+Ingress --> API
+API --> Redis
+API --> RDS
+Worker --> RDS
+Worker --> ES`,
+
+'flowchart':
+`diagramtype|flowchart
+Dev["Developer"] --> Push["git push"]
+Push --> PR["open pull request"]
+PR --> CI{CI pipeline}
+CI -->|lint fails| FixLint["fix lint errors"]
+FixLint --> Push
+CI -->|tests fail| FixTests["fix failing tests"]
+FixTests --> Push
+CI -->|all pass| Review["peer code review"]
+Review -->|changes requested| Revise["revise code"]
+Revise --> Push
+Review -->|approved| Merge["merge to main"]
+Merge --> BuildDev["build dev image"]
+BuildDev --> DeployDev["deploy to dev"]
+DeployDev --> Smoke{smoke tests}
+Smoke -->|fail| RollDev["rollback dev"]
+RollDev --> FixTests
+Smoke -->|pass| DeployStg["deploy to staging"]
+DeployStg --> UAT{UAT sign-off}
+UAT -->|reject| Revise
+UAT -->|approve| DeployProd["deploy to production"]
+DeployProd --> Watch{monitor 15 min}
+Watch -->|alerts fire| RollProd["rollback production"]
+Watch -->|stable| Done(["release complete"])`,
+
+'er':
+`diagramtype|er
+PATIENT {
+    int patient_id PK
+    string nhs_number
+    string full_name
+    date date_of_birth
+    string blood_group
+}
+DOCTOR {
+    int doctor_id PK
+    string gmc_number
+    string full_name
+    string specialty
+}
+APPOINTMENT {
+    int appointment_id PK
+    int patient_id FK
+    int doctor_id FK
+    string scheduled_at
+    string status
+    string notes
+}
+PRESCRIPTION {
+    int prescription_id PK
+    int appointment_id FK
+    int medication_id FK
+    float dosage_mg
+    int duration_days
+}
+MEDICATION {
+    int medication_id PK
+    string name
+    string controlled_class
+    float unit_price
+}
+WARD {
+    int ward_id PK
+    string name
+    string specialty
+    int bed_count
+}
+PATIENT ||--o{ APPOINTMENT : attends
+DOCTOR ||--o{ APPOINTMENT : conducts
+APPOINTMENT ||--o{ PRESCRIPTION : generates
+PRESCRIPTION }o--|| MEDICATION : contains
+DOCTOR }o--|| WARD : "assigned to"`,
+
+'gantt':
+`diagramtype|gantt
+title mobile banking app — q1 launch
+dateFormat YYYY-MM-DD
+section discovery
+    stakeholder interviews   : done,    d1, 2024-01-02, 5d
+    requirements workshop    : done,    d2, after d1, 3d
+    technical feasibility    : done,    d3, after d2, 4d
+section design
+    ux wireframes            : done,    des1, after d3, 7d
+    ui mockups               : done,    des2, after des1, 7d
+    design review            : active,  des3, after des2, 3d
+section development
+    auth and onboarding      :          dev1, 2024-02-05, 14d
+    account management       :          dev2, after dev1, 10d
+    payments module          : crit,    dev3, after dev1, 14d
+    notifications            :          dev4, after dev2, 7d
+section testing
+    qa functional testing    : crit,    t1, after dev3, 10d
+    penetration testing      : crit,    t2, after t1, 7d
+    uat with pilot users     :          t3, after t1, 7d
+section launch
+    app store submission     : crit,    l1, after t2, 5d
+    production release       : milestone, l2, after l1, 0d
+    hypercare period         :          l3, after l2, 14d`,
+
+'mindmap':
+`diagramtype|mindmap
+root((Enterprise\nArchitecture))
+  Business
+    Strategy
+      Vision
+      Goals
+    Capabilities
+      Core
+      Supporting
+    Processes
+      Value Streams
+  Application
+    Frontend
+      Web
+      Mobile
+    Backend
+      APIs
+      Services
+    Integration
+      Events
+      ESB
+  Data
+    Structured
+      Relational
+      Warehouse
+    Unstructured
+      Documents
+      Objects
+    Governance
+      Master Data
+      Lineage
+  Technology
+    Cloud
+      Compute
+      Network
+      Storage
+    Security
+      IAM
+      Encryption
+    Observability
+      Logging
+      Monitoring
+      Tracing`,
+
+'timing':
+`diagramtype|timing
+title digital transformation roadmap
+2023-Q1 : legacy audit completed
+2023-Q2 : cloud migration strategy approved
+2023-Q3 : dev platform modernised
+2023-Q4 : first microservice live
+2024-Q1 : api gateway operational
+2024-Q2 : mobile app launched
+2024-Q3 : data platform live
+2024-Q4 : ai features in production
+2025-Q1 : full cloud migration complete
+2025-Q2 : zero-trust security rollout
+2025-Q3 : legacy systems decommissioned
+2025-Q4 : platform maturity achieved`,
+
+};
+
+// ============================================================
+// ROADMAP RENDERER (replaces Mermaid timeline for 'timing' mode)
+// ============================================================
+function renderRoadmap(code, output) {
+    const rawLines = code.split('\n').slice(1);
+    let title = 'roadmap';
+    const items = [];
+
+    for (const line of rawLines) {
+        const t = line.trim();
+        if (!t) continue;
+        if (/^title\s+/i.test(t)) { title = t.replace(/^title\s+/i,'').trim(); continue; }
+        const m = t.match(/^(.+?)\s*:\s*(.+)$/);
+        if (m) items.push({ period: m[1].trim(), event: m[2].trim() });
+    }
+
+    if (!items.length) {
+        output.innerHTML = `<div class="empty-state"><div class="empty-icon">⬡</div><h3>ready for roadmap</h3><p>add entries as: period : milestone</p></div>`;
+        return;
+    }
+
+    // Group by year prefix (YYYY from YYYY-Qn or YYYY-Hn etc)
+    const yearMap = new Map();
+    for (const item of items) {
+        const ym = item.period.match(/^(\d{4})/);
+        const year = ym ? ym[1] : '—';
+        if (!yearMap.has(year)) yearMap.set(year, []);
+        yearMap.get(year).push(item);
+    }
+
+    // Year accent colours — teal, maroon, blue, grey (cycling)
+    const palette = [
+        { accent:'#0d9488' },   // teal
+        { accent:'#9f1239' },   // maroon
+        { accent:'#1d4ed8' },   // blue
+        { accent:'#4b5563' },   // grey
+    ];
+
+    let yi = 0;
+    const groupsHTML = [];
+    const yearKeys = [...yearMap.keys()];
+
+    for (const year of yearKeys) {
+        const p = palette[yi % palette.length]; yi++;
+        const yearItems = yearMap.get(year);
+
+        const itemsHTML = yearItems.map(item => {
+            const qm = item.period.match(/(?:Q\d+|H\d+|[A-Z]{3,4}|\d+)$/i);
+            const qLabel = qm ? qm[0].toUpperCase() : item.period;
+
+            return `<div class="rmi">
+                <div class="rmline">
+                    <div class="rmrail" style="background:${p.accent}"></div>
+                    <div class="rmdot" style="background:${p.accent};color:${p.accent}"></div>
+                    <div class="rmrail" style="background:${p.accent}"></div>
+                </div>
+                <div class="rmstem" style="background:${p.accent}"></div>
+                <div class="rmcard" style="border-left-color:${p.accent}">
+                    <span class="rmq" style="color:${p.accent}">${qLabel}</span>
+                    <span class="rmev">${item.event}</span>
+                </div>
+            </div>`;
+        }).join('');
+
+        groupsHTML.push(`<div class="rmg">
+            <div class="rmyh" style="border-color:${p.accent}44">
+                <span class="rmyl" style="color:${p.accent}">${year}</span>
+                <div class="rmyr" style="background:${p.accent}"></div>
+            </div>
+            <div class="rmr">${itemsHTML}</div>
+        </div>`);
+
+        if (yi < yearKeys.length) {
+            groupsHTML.push(`<div class="rm-gap"><div class="rm-gap-line"></div></div>`);
+        }
+    }
+
+    const itemCount = items.length;
+    output.innerHTML = `<div class="rmw">
+        <div class="rmt">${title.toUpperCase()}</div>
+        <div class="rmt-sub">${itemCount} milestone${itemCount !== 1 ? 's' : ''} · ${yearKeys.length} year${yearKeys.length !== 1 ? 's' : ''}</div>
+        <div class="rms">${groupsHTML.join('')}</div>
+    </div>`;
+}
+
+function loadExample() {
+    const mode = detectMode(editor.value);
+    editor.value = (mode !== 'architecture' && UML_EXAMPLES[mode]) ? UML_EXAMPLES[mode] : EXAMPLE;
+    updateLineNumbers();
+    clearTimeout(renderTimer);
+    render();
+}
+
+// ============================================================
+// HELP
+// ============================================================
+function showHelp() {
+    document.getElementById('help-modal').classList.add('visible');
+    buildColorGrid();
+}
+
+function hideHelp(e) {
+    if (!e || e.target.id === 'help-modal') {
+        document.getElementById('help-modal').classList.remove('visible');
+    }
+}
+
+function buildColorGrid() {
+    const grid = document.getElementById('color-grid');
+    if (grid.children.length > 0) return;
+    for (const [name, hex] of Object.entries(COLOURS)) {
+        const chip = document.createElement('div');
+        chip.className = 'color-chip';
+        chip.style.background = hex;
+        chip.style.color = isLight(hex) ? '#1a202c' : '#ffffff';
+        if (name === 'white') chip.style.border = '1px solid #d0d7de';
+        chip.textContent = name;
+        grid.appendChild(chip);
+    }
+}
+
+// ============================================================
+// RESIZER
+// ============================================================
+const resizer = document.getElementById('resizer');
+const editorPane = document.getElementById('editor-pane');
+let resizing = false;
+
+resizer.addEventListener('mousedown', () => {
+    resizing = true;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+});
+document.addEventListener('mousemove', e => {
+    if (!resizing) return;
+    const rect = document.querySelector('.main').getBoundingClientRect();
+    const w = Math.min(Math.max(e.clientX - rect.left, 250), rect.width - 250);
+    editorPane.style.width = w + 'px';
+});
+document.addEventListener('mouseup', () => {
+    resizing = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+});
+
+// ============================================================
+// INIT
+// ============================================================
+updateLineNumbers();
+updateModeBar();
+render();
+
+</script>
+</body>
+</html>
