@@ -1960,7 +1960,7 @@ rect rgb(200,200,200)
     end
 end
 
-create participant OTPService as OTP Service
+create participant OTPService as "OTP Service"
 APIGateway->>OTPService: request 2FA OTP
 OTPService-->>Customer: SMS OTP code
 Customer->>APIGateway: submit OTP
