@@ -4,7 +4,7 @@ Privacy-first architecture diagramming for enterprise architects.
 
 **One HTML file. No install. No login. No data stored. Open it and draw.**
 
-[Try it live](https://anuradhabose.github.io/archsketch) · [Download index.html](https://raw.githubusercontent.com/anuradhabose/archsketch/main/index.html)
+[Try it live](https://anuradhagoutam2-dev.github.io/archsketch) · [Download index.html](https://raw.githubusercontent.com/anuradhagoutam2-dev/archsketch/main/index.html)
 
 ---
 
@@ -32,7 +32,7 @@ An architect should be able to diagram the most sensitive enterprise topology wi
 Download `index.html` and open it in any browser. That is all.
 
 ```
-curl -O https://raw.githubusercontent.com/anuradhabose/archsketch/main/index.html
+curl -O https://raw.githubusercontent.com/anuradhagoutam2-dev/archsketch/main/index.html
 open index.html
 ```
 
