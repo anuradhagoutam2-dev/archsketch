@@ -826,6 +826,24 @@ destroy Auditor</pre>
         <div class="rule-item">create and destroy work exactly as on sequencediagram.org — participants can appear and disappear mid-flow</div>
         <div class="rule-item">destroy draws an X through the lifeline at that point</div>
 
+        <h3>sequence — autonumber and jump</h3>
+        <pre>%% #5                               // jump: next arrow at this level becomes 5 (or e inside a block)
+
+// example — skip step 4 on the fast path:
+A->>B: step one                     // 1
+A->>B: step two                     // 2
+A->>B: step three                   // 3
+alt fast path (skip step 4)
+    %% #5                           // jump to e (5th letter) inside this block
+    A->>B: step five                // 3e
+else normal path
+    A->>B: step four                // 3d  ← use %% #4 before to land exactly on d
+end
+A->>B: step six                     // 4 (top-level continues)</pre>
+        <div class="rule-item">top level uses numbers (1 2 3), inside any block uses letters (a b c)</div>
+        <div class="rule-item">%% #N on its own line jumps the counter — use inside alt/else to skip steps conditionally</div>
+        <div class="rule-item">the "from N" input in the toolbar shifts the entire top-level sequence start</div>
+
         <h3>sequence — blocks and grouping</h3>
         <pre>loop Retry up to 3 times            // repeat block
     Alice->>Bob: ping
@@ -1683,12 +1701,10 @@ async function render() {
                 seqNums = buildHierNumbers(mmdBody);
                 // offset numbers by startVal - 1 by bumping top-level counter seed
                 if (startVal > 1) {
-                    let topCount = 0;
                     seqNums = seqNums.map(n => {
                         if (n === null) return null;
-                        const parts = n.split('.');
-                        parts[0] = String(parseInt(parts[0]) + startVal - 1);
-                        return parts.join('.');
+                        // labels are like "1", "1a", "1b", "2a" — shift leading number
+                        return n.replace(/^(\d+)/, d => String(parseInt(d) + startVal - 1));
                     });
                 }
             }
@@ -1970,38 +1986,67 @@ function setSeqNum(mode) {
 }
 
 function buildHierNumbers(body) {
-    // Parse sequence body lines, track nesting, assign hierarchical numbers to arrow lines
-    const BLOCK_OPEN  = /^(alt|else|opt|loop|par|and|rect|critical|break)\b/i;
+    // Top level: numbers (1, 2, 3). Inside any block: letters (a, b, c).
+    // %% #N on its own line jumps the counter at the current depth to N.
+    const BLOCK_OPEN  = /^(alt|opt|loop|par|rect|critical|break)\b/i;
+    const ELSE_CONT   = /^(else|and)\b/i;
     const BLOCK_CLOSE = /^end\b/i;
     const ARROW_LINE  = /->|-->/;
+    const JUMP_CMD    = /^%%\s*#\s*(\d+)\s*$/;
+
     const lines = body.split('\n');
-    const nums = [];
-    const counters = [0]; // stack per depth level, index 0 = top
-    let depth = 0;
+    const nums  = [];
+
+    // Stack of frames: { counter, prefix, lastLabel, useLetters }
+    const stack = [{ counter: 0, prefix: '', lastLabel: '', useLetters: false }];
+
+    function toLetter(n) {
+        // 1→a, 2→b, …, 26→z, 27→aa, 28→ab …
+        if (n <= 26) return String.fromCharCode(96 + n);
+        return String.fromCharCode(96 + Math.floor((n - 1) / 26)) +
+               String.fromCharCode(97 + ((n - 1) % 26));
+    }
 
     for (const line of lines) {
         const t = line.trim();
-        if (!t || t.startsWith('%%') || t.startsWith('note') || t.startsWith('participant') ||
-            t.startsWith('actor') || t.startsWith('create') || t.startsWith('destroy')) {
+
+        // %% #5  →  jump counter so next arrow at this depth is labelled 5 (or 'e')
+        const jumpM = t.match(JUMP_CMD);
+        if (jumpM) {
+            stack[stack.length - 1].counter = parseInt(jumpM[1]) - 1;
             nums.push(null);
             continue;
         }
+
+        if (!t || t.startsWith('%%') || t.startsWith('note') ||
+            t.startsWith('participant') || t.startsWith('actor') ||
+            t.startsWith('create') || t.startsWith('destroy')) {
+            nums.push(null);
+            continue;
+        }
+
         if (BLOCK_CLOSE.test(t)) {
-            if (depth > 0) { depth--; }
+            if (stack.length > 1) stack.pop();
             nums.push(null);
             continue;
         }
+
         if (BLOCK_OPEN.test(t)) {
-            depth++;
-            while (counters.length <= depth) counters.push(0);
+            const parent = stack[stack.length - 1];
+            // Children use parent's last emitted label as their prefix
+            stack.push({ counter: 0, prefix: parent.lastLabel, lastLabel: parent.lastLabel, useLetters: true });
             nums.push(null);
             continue;
         }
+
+        if (ELSE_CONT.test(t)) { nums.push(null); continue; }
+
         if (ARROW_LINE.test(t)) {
-            counters[depth] = (counters[depth] || 0) + 1;
-            // reset deeper counters
-            for (let i = depth + 1; i < counters.length; i++) counters[i] = 0;
-            const label = counters.slice(0, depth + 1).filter((_, i) => i === 0 || counters[i] > 0 || i <= depth).join('.');
+            const frame = stack[stack.length - 1];
+            frame.counter++;
+            const suffix = frame.useLetters ? toLetter(frame.counter) : String(frame.counter);
+            const label  = frame.prefix + suffix;
+            frame.lastLabel = label;
             nums.push(label);
         } else {
             nums.push(null);
