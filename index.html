@@ -1891,7 +1891,7 @@ function trigger(url, filename) {
 // MODE BAR
 // ============================================================
 function setMode(type) {
-    editor.value = type === 'architecture' ? EXAMPLE : (UML_EXAMPLES[type] || 'diagramtype|' + type + '\n');
+    editor.value = type === 'architecture' ? '' : ('diagramtype|' + type + '\n');
     updateLineNumbers();
     clearTimeout(renderTimer);
     render();
