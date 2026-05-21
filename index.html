@@ -820,9 +820,10 @@ Bob-->>-Alice: reply (deactivate)    // - deactivates lifebar</pre>
 Alice->>Session: init(userId)
 create actor Auditor as Audit Log   // create an actor mid-flow
 Session->>Auditor: write entry
-destroy Session                     // participant removed with X mark
-Alice->>Session: token expired      // shown with X through lifeline
-destroy Auditor</pre>
+destroy Session                     // destroy goes BEFORE the last message to that participant
+Alice->>Session: token expired      // X mark drawn here on Session lifeline
+destroy Auditor
+Session->>Auditor: flush log        // X mark drawn here on Auditor lifeline</pre>
         <div class="rule-item">create and destroy work exactly as on sequencediagram.org — participants can appear and disappear mid-flow</div>
         <div class="rule-item">destroy draws an X through the lifeline at that point</div>
 
@@ -2197,6 +2198,7 @@ APIGateway->>OTPService: request 2FA OTP
 OTPService-->>Customer: SMS OTP code
 Customer->>APIGateway: submit OTP
 destroy OTPService
+APIGateway->>OTPService: close session
 
 loop retry on timeout
     APIGateway->>CoreBanking: debit source account
