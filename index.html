@@ -313,6 +313,14 @@
             padding-left: 10px;
             border-left: 1px solid #d0d7de;
         }
+        .seq-numbar {
+            display: none;
+            align-items: center;
+            gap: 3px;
+            margin-left: 10px;
+            padding-left: 10px;
+            border-left: 1px solid #d0d7de;
+        }
         .dir-btn {
             height: 22px;
             border-radius: 4px;
@@ -331,6 +339,25 @@
             background: rgba(88,166,255,0.12);
             border-color: #58a6ff;
             color: #58a6ff;
+        }
+        .seq-start-input {
+            height: 22px;
+            width: 38px;
+            border-radius: 4px;
+            border: 1px solid #d0d7de;
+            background: #f6f8fa;
+            color: #57606a;
+            font-size: 10px;
+            font-weight: 600;
+            text-align: center;
+            padding: 0 4px;
+            outline: none;
+        }
+        .seq-start-input:focus { border-color: #58a6ff; }
+        .seq-start-label {
+            font-size: 10px;
+            color: #57606a;
+            white-space: nowrap;
         }
         #zoom-level {
             font-size: 11px;
@@ -684,6 +711,12 @@
             <div class="dir-toggle" id="dir-toggle">
                 <button class="dir-btn active" id="dir-td" onclick="setFlowDir('TD')" title="top to bottom">↓ top-bottom</button>
                 <button class="dir-btn" id="dir-lr" onclick="setFlowDir('LR')" title="left to right">→ left-right</button>
+            </div>
+            <div class="seq-numbar" id="seq-numbar">
+                <button class="dir-btn" id="seq-num-off" onclick="setSeqNum('off')" title="no numbering">off</button>
+                <button class="dir-btn" id="seq-num-seq" onclick="setSeqNum('seq')" title="1  2  3">1 2 3</button>
+                <button class="dir-btn" id="seq-num-hier" onclick="setSeqNum('hier')" title="1  1.1  1.2  2">1.1 1.2</button>
+                <span class="seq-start-label" id="seq-start-wrap" style="display:none">from <input class="seq-start-input" id="seq-start" type="number" min="0" value="1" oninput="render()" title="start number"></span>
             </div>
             <div class="zoom-controls">
                 <button class="zoom-btn" onclick="zoomOut()" title="zoom out">&#8722;</button>
@@ -1585,6 +1618,7 @@ async function render() {
 
         const dirToggle = document.getElementById('dir-toggle');
         dirToggle.style.display = mode === 'flowchart' ? 'flex' : 'none';
+        document.getElementById('seq-numbar').style.display = mode === 'sequence' ? 'flex' : 'none';
 
         if (mode === 'timing') {
             renderRoadmap(code, output);
@@ -1608,13 +1642,41 @@ async function render() {
             return;
         }
 
-        const mmd = mmdHeader + '\n' + mmdBody;
+        // Build sequence numbering
+        let seqNums = null;
+        let mmdBodyFinal = mmdBody;
+        if (mode === 'sequence' && seqNumMode !== 'off') {
+            const startVal = parseInt(document.getElementById('seq-start').value, 10) || 1;
+            if (seqNumMode === 'seq') {
+                const prefix = startVal !== 1 ? `autonumber ${startVal}` : 'autonumber';
+                mmdBodyFinal = prefix + '\n' + mmdBody;
+            } else if (seqNumMode === 'hier') {
+                // inject autonumber so Mermaid draws the circles, then we overwrite the text
+                mmdBodyFinal = 'autonumber\n' + mmdBody;
+                seqNums = buildHierNumbers(mmdBody);
+                // offset numbers by startVal - 1 by bumping top-level counter seed
+                if (startVal > 1) {
+                    let topCount = 0;
+                    seqNums = seqNums.map(n => {
+                        if (n === null) return null;
+                        const parts = n.split('.');
+                        parts[0] = String(parseInt(parts[0]) + startVal - 1);
+                        return parts.join('.');
+                    });
+                }
+            }
+        }
+
+        const mmd = mmdHeader + '\n' + mmdBodyFinal;
         try {
             const uid = 'uml_' + Date.now();
             const { svg } = await mermaid.render(uid, mmd);
             output.innerHTML = svg;
             postProcessMermaidSVG(output, mode);
-            if (mode === 'sequence') postProcessSequenceSVG(output);
+            if (mode === 'sequence') {
+                postProcessSequenceSVG(output);
+                if (seqNumMode === 'hier' && seqNums) applyHierNumbers(output, seqNums);
+            }
             resetZoomDisplay();
             diagramInfo.textContent = mode + ' diagram';
         } catch(err) {
@@ -1630,6 +1692,7 @@ async function render() {
     // Architecture / block diagram mode
     modeBadge.style.display = 'none';
     document.getElementById('dir-toggle').style.display = 'none';
+    document.getElementById('seq-numbar').style.display = 'none';
 
     const parsed = parse(code);
 
@@ -1850,6 +1913,74 @@ function setFlowDir(dir) {
     document.getElementById('dir-lr').classList.toggle('active', dir === 'LR');
     clearTimeout(renderTimer);
     render();
+}
+
+// ============================================================
+// SEQUENCE AUTONUMBER
+// ============================================================
+let seqNumMode = 'off'; // 'off' | 'seq' | 'hier'
+
+function setSeqNum(mode) {
+    seqNumMode = mode;
+    ['off','seq','hier'].forEach(m =>
+        document.getElementById('seq-num-' + m).classList.toggle('active', m === mode)
+    );
+    document.getElementById('seq-start-wrap').style.display = (mode !== 'off') ? 'inline-flex' : 'none';
+    clearTimeout(renderTimer);
+    render();
+}
+
+function buildHierNumbers(body) {
+    // Parse sequence body lines, track nesting, assign hierarchical numbers to arrow lines
+    const BLOCK_OPEN  = /^(alt|else|opt|loop|par|and|rect|critical|break)\b/i;
+    const BLOCK_CLOSE = /^end\b/i;
+    const ARROW_LINE  = /->|-->/;
+    const lines = body.split('\n');
+    const nums = [];
+    const counters = [0]; // stack per depth level, index 0 = top
+    let depth = 0;
+
+    for (const line of lines) {
+        const t = line.trim();
+        if (!t || t.startsWith('%%') || t.startsWith('note') || t.startsWith('participant') ||
+            t.startsWith('actor') || t.startsWith('create') || t.startsWith('destroy')) {
+            nums.push(null);
+            continue;
+        }
+        if (BLOCK_CLOSE.test(t)) {
+            if (depth > 0) { depth--; }
+            nums.push(null);
+            continue;
+        }
+        if (BLOCK_OPEN.test(t)) {
+            depth++;
+            while (counters.length <= depth) counters.push(0);
+            nums.push(null);
+            continue;
+        }
+        if (ARROW_LINE.test(t)) {
+            counters[depth] = (counters[depth] || 0) + 1;
+            // reset deeper counters
+            for (let i = depth + 1; i < counters.length; i++) counters[i] = 0;
+            const label = counters.slice(0, depth + 1).filter((_, i) => i === 0 || counters[i] > 0 || i <= depth).join('.');
+            nums.push(label);
+        } else {
+            nums.push(null);
+        }
+    }
+    return nums;
+}
+
+function applyHierNumbers(container, nums) {
+    // Replace Mermaid's sequential autonumber text nodes with hierarchical labels
+    const svg = container.querySelector('svg');
+    if (!svg) return;
+    // Mermaid renders sequence numbers as <text class="sequenceNumber">
+    const numEls = Array.from(svg.querySelectorAll('text.sequenceNumber'));
+    const labels = nums.filter(n => n !== null);
+    numEls.forEach((el, i) => {
+        if (labels[i] !== undefined) el.textContent = labels[i];
+    });
 }
 
 // ============================================================
