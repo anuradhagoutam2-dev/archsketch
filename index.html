@@ -1668,11 +1668,11 @@ async function render() {
         }
 
         const mmd = mmdHeader + '\n' + mmdBodyFinal;
-        cleanMermaidOrphans();
+        const uid = 'uml_' + Date.now();
+        cleanMermaidOrphans(uid);
         try {
-            const uid = 'uml_' + Date.now();
             const { svg } = await mermaid.render(uid, mmd);
-            cleanMermaidOrphans();
+            cleanMermaidOrphans(uid);
             output.innerHTML = svg;
             postProcessMermaidSVG(output, mode);
             if (mode === 'sequence') {
@@ -1681,14 +1681,18 @@ async function render() {
             }
             resetZoomDisplay();
             diagramInfo.textContent = mode + ' diagram';
+            updateStatus(lines.length, 0, 0);
+            statusbar.classList.remove('has-errors');
         } catch(err) {
-            cleanMermaidOrphans();
+            cleanMermaidOrphans(uid);
             const msg = extractMermaidError(err);
             output.innerHTML = `<div class="empty-state">
                 <div class="empty-icon" style="color:#f85149">⚠</div>
                 <h3 style="color:#f85149">syntax error</h3>
                 <p style="font-family:monospace;font-size:12px;color:#cf222e;max-width:420px;word-break:break-word">${msg}</p>
             </div>`;
+            updateStatus(lines.length, 0, 1);
+            statusbar.classList.add('has-errors');
         }
         return;
     }
@@ -1716,16 +1720,16 @@ async function render() {
 
     const mmd = toMermaid(parsed);
 
-    cleanMermaidOrphans();
+    const archUid = 'arch_' + Date.now();
+    cleanMermaidOrphans(archUid);
     try {
-        const uid = 'arch_' + Date.now();
-        const { svg } = await mermaid.render(uid, mmd);
-        cleanMermaidOrphans();
+        const { svg } = await mermaid.render(archUid, mmd);
+        cleanMermaidOrphans(archUid);
         output.innerHTML = svg;
         resetZoomDisplay();
         diagramInfo.textContent = `${parsed.nodeCount} nodes · ${parsed.edges.length} connections`;
     } catch(err) {
-        cleanMermaidOrphans();
+        cleanMermaidOrphans(archUid);
         const msg = extractMermaidError(err);
         output.innerHTML = `<div class="empty-state">
             <div class="empty-icon" style="color:#f85149">⚠</div>
@@ -1979,9 +1983,14 @@ function buildHierNumbers(body) {
     return nums;
 }
 
-function cleanMermaidOrphans() {
-    // Mermaid leaves a render div in document.body on failed renders — remove them all
-    document.body.querySelectorAll('[id^="uml_"],[id^="arch_"],[id^="dmermaid"],[id^="mermaid-"]')
+function cleanMermaidOrphans(uid) {
+    // Mermaid v10 wraps the render id as "d{uid}" appended to document.body
+    if (uid) {
+        const el = document.getElementById('d' + uid);
+        if (el) el.remove();
+    }
+    // Broad sweep for any leftover render containers
+    document.body.querySelectorAll('[id^="duml_"],[id^="darch_"],[id^="dmermaid"],[id^="mermaid-error"]')
         .forEach(el => { if (el.parentElement === document.body) el.remove(); });
 }
 
