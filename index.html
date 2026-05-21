@@ -1668,9 +1668,11 @@ async function render() {
         }
 
         const mmd = mmdHeader + '\n' + mmdBodyFinal;
+        cleanMermaidOrphans();
         try {
             const uid = 'uml_' + Date.now();
             const { svg } = await mermaid.render(uid, mmd);
+            cleanMermaidOrphans();
             output.innerHTML = svg;
             postProcessMermaidSVG(output, mode);
             if (mode === 'sequence') {
@@ -1680,10 +1682,12 @@ async function render() {
             resetZoomDisplay();
             diagramInfo.textContent = mode + ' diagram';
         } catch(err) {
+            cleanMermaidOrphans();
+            const msg = extractMermaidError(err);
             output.innerHTML = `<div class="empty-state">
                 <div class="empty-icon" style="color:#f85149">⚠</div>
-                <h3 style="color:#f85149">render error</h3>
-                <p>check your ${mode} diagram syntax</p>
+                <h3 style="color:#f85149">syntax error</h3>
+                <p style="font-family:monospace;font-size:12px;color:#cf222e;max-width:420px;word-break:break-word">${msg}</p>
             </div>`;
         }
         return;
@@ -1712,17 +1716,21 @@ async function render() {
 
     const mmd = toMermaid(parsed);
 
+    cleanMermaidOrphans();
     try {
         const uid = 'arch_' + Date.now();
         const { svg } = await mermaid.render(uid, mmd);
+        cleanMermaidOrphans();
         output.innerHTML = svg;
         resetZoomDisplay();
         diagramInfo.textContent = `${parsed.nodeCount} nodes · ${parsed.edges.length} connections`;
     } catch(err) {
+        cleanMermaidOrphans();
+        const msg = extractMermaidError(err);
         output.innerHTML = `<div class="empty-state">
             <div class="empty-icon" style="color:#f85149">⚠</div>
-            <h3 style="color:#f85149">render error</h3>
-            <p>check syntax — all connections must reference defined components</p>
+            <h3 style="color:#f85149">syntax error</h3>
+            <p style="font-family:monospace;font-size:12px;color:#cf222e;max-width:420px;word-break:break-word">${msg}</p>
         </div>`;
     }
 }
@@ -1969,6 +1977,20 @@ function buildHierNumbers(body) {
         }
     }
     return nums;
+}
+
+function cleanMermaidOrphans() {
+    // Mermaid leaves a render div in document.body on failed renders — remove them all
+    document.body.querySelectorAll('[id^="uml_"],[id^="arch_"],[id^="dmermaid"],[id^="mermaid-"]')
+        .forEach(el => { if (el.parentElement === document.body) el.remove(); });
+}
+
+function extractMermaidError(err) {
+    if (!err) return 'unknown error';
+    const raw = err.message || err.str || String(err);
+    // Strip the long "Parse error on line N:" prefix Mermaid sometimes adds
+    const m = raw.match(/Parse error[^:]*:\s*([\s\S]+)/i) || raw.match(/Error:\s*([\s\S]+)/i);
+    return m ? m[1].trim().split('\n')[0] : raw.split('\n')[0];
 }
 
 function applyHierNumbers(container, nums) {
