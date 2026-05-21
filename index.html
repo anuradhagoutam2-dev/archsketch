@@ -1609,6 +1609,8 @@ async function render() {
                 <p>valid types: ${UML_VALID_TYPES.join(' · ')}</p>
             </div>`;
             diagramInfo.textContent = '';
+            updateStatus(lines.length, 0, 1);
+            statusbar.classList.add('has-errors');
             return;
         }
 
@@ -1668,11 +1670,11 @@ async function render() {
         }
 
         const mmd = mmdHeader + '\n' + mmdBodyFinal;
-        const uid = 'uml_' + Date.now();
-        cleanMermaidOrphans(uid);
+        const bodySnap = snapshotBody();
         try {
+            const uid = 'uml_' + Date.now();
             const { svg } = await mermaid.render(uid, mmd);
-            cleanMermaidOrphans(uid);
+            cleanMermaidOrphans(bodySnap);
             output.innerHTML = svg;
             postProcessMermaidSVG(output, mode);
             if (mode === 'sequence') {
@@ -1684,7 +1686,7 @@ async function render() {
             updateStatus(lines.length, 0, 0);
             statusbar.classList.remove('has-errors');
         } catch(err) {
-            cleanMermaidOrphans(uid);
+            cleanMermaidOrphans(bodySnap);
             const msg = extractMermaidError(err);
             output.innerHTML = `<div class="empty-state">
                 <div class="empty-icon" style="color:#f85149">⚠</div>
@@ -1720,16 +1722,16 @@ async function render() {
 
     const mmd = toMermaid(parsed);
 
-    const archUid = 'arch_' + Date.now();
-    cleanMermaidOrphans(archUid);
+    const archSnap = snapshotBody();
     try {
+        const archUid = 'arch_' + Date.now();
         const { svg } = await mermaid.render(archUid, mmd);
-        cleanMermaidOrphans(archUid);
+        cleanMermaidOrphans(archSnap);
         output.innerHTML = svg;
         resetZoomDisplay();
         diagramInfo.textContent = `${parsed.nodeCount} nodes · ${parsed.edges.length} connections`;
     } catch(err) {
-        cleanMermaidOrphans(archUid);
+        cleanMermaidOrphans(archSnap);
         const msg = extractMermaidError(err);
         output.innerHTML = `<div class="empty-state">
             <div class="empty-icon" style="color:#f85149">⚠</div>
@@ -1983,15 +1985,15 @@ function buildHierNumbers(body) {
     return nums;
 }
 
-function cleanMermaidOrphans(uid) {
-    // Mermaid v10 wraps the render id as "d{uid}" appended to document.body
-    if (uid) {
-        const el = document.getElementById('d' + uid);
-        if (el) el.remove();
-    }
-    // Broad sweep for any leftover render containers
-    document.body.querySelectorAll('[id^="duml_"],[id^="darch_"],[id^="dmermaid"],[id^="mermaid-error"]')
-        .forEach(el => { if (el.parentElement === document.body) el.remove(); });
+function snapshotBody() {
+    return new Set(Array.from(document.body.children).map(el => el));
+}
+
+function cleanMermaidOrphans(snapshot) {
+    // Remove any elements Mermaid injected into document.body during render
+    Array.from(document.body.children).forEach(el => {
+        if (!snapshot.has(el)) el.remove();
+    });
 }
 
 function extractMermaidError(err) {
