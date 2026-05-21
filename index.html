@@ -1944,10 +1944,10 @@ participant FraudDetection
 participant CoreBanking
 actor ExternalBank
 
-note over Customer,MobileBanking: retail banking — fund transfer
+note over Customer,MobileBanking: retail banking - fund transfer
 
 rect rgb(200,200,200)
-    Customer->>MobileBanking: initiate transfer £500
+    Customer->>MobileBanking: initiate transfer 500 GBP
     MobileBanking->>APIGateway: POST /transfers
     APIGateway->>FraudDetection: screen transaction
     note right of FraudDetection: ai risk scoring
@@ -1960,19 +1960,19 @@ rect rgb(200,200,200)
     end
 end
 
-create participant OTPService as "OTP Service"
+create participant OTPService
 APIGateway->>OTPService: request 2FA OTP
 OTPService-->>Customer: SMS OTP code
 Customer->>APIGateway: submit OTP
 destroy OTPService
 
-loop retry on timeout (max 2 attempts)
+loop retry on timeout
     APIGateway->>CoreBanking: debit source account
     CoreBanking-->>APIGateway: debit confirmed
 end
 
-par settle and notify in parallel
-    APIGateway->>ExternalBank: SWIFT transfer instruction
+par settle and notify
+    APIGateway->>ExternalBank: SWIFT transfer
     ExternalBank-->>APIGateway: settlement confirmed
 and
     APIGateway->>MobileBanking: push notification
