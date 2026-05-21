@@ -1352,6 +1352,31 @@ function postProcessSequenceSVG(container) {
         r.setAttribute('rx', String(rx));
         r.setAttribute('ry', String(rx));
     });
+
+    // Sequence autonumber circles — teal pill, white bold text, sized to content
+    svg.querySelectorAll('text.sequenceNumber').forEach(text => {
+        const label = text.textContent.trim();
+        const isHier = label.includes('.');
+        const minR = isHier ? 14 : 10;
+
+        // Style the text
+        text.style.fill       = '#ffffff';
+        text.style.fontWeight = 'bold';
+        text.style.fontSize   = isHier ? '9px' : '11px';
+        text.style.fontFamily = 'monospace';
+
+        // Style the backing circle
+        const parent = text.parentElement;
+        if (parent) {
+            const circle = parent.querySelector('circle');
+            if (circle) {
+                const r = Math.max(parseFloat(circle.getAttribute('r') || '10'), minR);
+                circle.setAttribute('r', String(r));
+                circle.style.fill   = '#0d9488';
+                circle.style.stroke = '#0d9488';
+            }
+        }
+    });
 }
 
 // ============================================================
