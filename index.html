@@ -2180,18 +2180,16 @@ actor ExternalBank
 
 note over Customer,MobileBanking: retail banking - fund transfer
 
-rect rgb(200,200,200)
-    Customer->>MobileBanking: initiate transfer 500 GBP
-    MobileBanking->>APIGateway: POST /transfers
-    APIGateway->>FraudDetection: screen transaction
-    note right of FraudDetection: ai risk scoring
-    alt high risk score
-        FraudDetection-->>APIGateway: blocked
-        APIGateway-->>MobileBanking: 403 transaction blocked
-        MobileBanking-->>Customer: transfer declined
-    else cleared
-        FraudDetection-->>APIGateway: risk score ok
-    end
+Customer->>MobileBanking: initiate transfer 500 GBP
+MobileBanking->>APIGateway: POST /transfers
+APIGateway->>FraudDetection: screen transaction
+note right of FraudDetection: ai risk scoring
+alt high risk score
+    FraudDetection-->>APIGateway: blocked
+    APIGateway-->>MobileBanking: 403 transaction blocked
+    MobileBanking-->>Customer: transfer declined
+else cleared
+    FraudDetection-->>APIGateway: risk score ok
 end
 
 create participant OTPService
