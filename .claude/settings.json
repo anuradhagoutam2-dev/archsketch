@@ -30,7 +30,8 @@
       "Bash(git -C /c/Myprojects/ArchMate add FEATURES.md)",
       "Bash(git -C /c/Myprojects/ArchMate commit -m \"docs: add FEATURES.md — full feature reference for ArchSketch v1.0\")",
       "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: mirrorActors false, destroy pattern must use message FROM participant not TO it\")",
-      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: style actor-cross lines to show red X mark on destroy\")"
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: style actor-cross lines to show red X mark on destroy\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"feat: syntax highlighting, editor font zoom, swap editor/preview panes\")"
     ]
   }
 }

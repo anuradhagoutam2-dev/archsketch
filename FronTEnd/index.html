@@ -201,6 +201,23 @@
             display: block;
             padding-right: 8px;
         }
+        #highlight-layer {
+            position: absolute;
+            left: 44px;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            padding: 14px 16px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            word-break: break-word;
+            overflow: hidden;
+            pointer-events: none;
+            tab-size: 2;
+            color: #8b949e;
+        }
         #code-editor {
             position: absolute;
             left: 44px;
@@ -215,11 +232,24 @@
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 13px;
             line-height: 1.65;
-            color: #c9d1d9;
+            color: transparent;
+            caret-color: #c9d1d9;
             overflow-y: auto;
             tab-size: 2;
+            position: relative;
+            z-index: 1;
         }
+        #code-editor::placeholder { color: #4a5568; }
         #code-editor::selection { background: rgba(88, 166, 255, 0.3); }
+        .hl-comment     { color: #636e7b; font-style: italic; }
+        .hl-meta        { color: #58a6ff; }
+        .hl-type        { color: #e06c75; font-weight: 600; }
+        .hl-keyword     { color: #e5a64f; font-weight: 600; }
+        .hl-participant { color: #79b8ff; font-weight: 600; }
+        .hl-name        { color: #79b8ff; }
+        .hl-arrow       { color: #e5a64f; font-weight: 700; }
+        .hl-text        { color: #8b949e; }
+        .hl-label       { color: #cdd9e5; }
 
         /* ERROR PANEL */
         .error-panel {
@@ -661,6 +691,7 @@
     <button class="btn" onclick="loadExample()">⬡ example</button>
     <button class="btn" onclick="clearEditor()">✕ clear</button>
     <button class="btn" onclick="showHelp()">? syntax guide</button>
+    <button class="btn" onclick="swapPanes()" title="swap editor and preview sides">⇄ swap</button>
     <input type="file" id="file-input" accept=".md,.html" style="display:none" onchange="handleFileOpen(event)">
 </div>
 
@@ -690,8 +721,14 @@
         <div class="pane-header">
             <div class="pane-dot" style="background:#58a6ff"></div>
             diagram code
+            <div style="margin-left:auto;display:flex;align-items:center;gap:3px">
+                <button class="zoom-btn" onclick="editorZoomOut()" title="decrease font size">&#8722;</button>
+                <span id="editor-font-size" style="font-size:10px;color:#57606a;min-width:28px;text-align:center">13px</span>
+                <button class="zoom-btn" onclick="editorZoomIn()" title="increase font size">+</button>
+            </div>
         </div>
         <div class="editor-wrapper">
+            <div id="highlight-layer" aria-hidden="true"></div>
             <div class="line-numbers" id="line-numbers"><span>1</span></div>
             <textarea id="code-editor" spellcheck="false"
                 placeholder="// type your architecture here&#10;// example:&#10;device [edge router] color sky-blue&#10;service [api gateway] color teal&#10;database [config db] color light-grey&#10;&#10;edge router -> api gateway : https&#10;api gateway -> config db : query"></textarea>
@@ -1804,6 +1841,7 @@ const editor = document.getElementById('code-editor');
 
 editor.addEventListener('input', () => {
     updateLineNumbers();
+    updateHighlight();
     updateModeBar();
     clearTimeout(renderTimer);
     renderTimer = setTimeout(render, 350);
@@ -1811,6 +1849,7 @@ editor.addEventListener('input', () => {
 
 editor.addEventListener('scroll', () => {
     document.getElementById('line-numbers').scrollTop = editor.scrollTop;
+    updateHighlight();
 });
 
 editor.addEventListener('keydown', e => {
@@ -1901,6 +1940,7 @@ function trigger(url, filename) {
 function setMode(type) {
     editor.value = type === 'architecture' ? '' : ('diagramtype|' + type + '\n');
     updateLineNumbers();
+    updateHighlight();
     clearTimeout(renderTimer);
     render();
 }
@@ -2092,6 +2132,124 @@ function applyHierNumbers(container, nums) {
     numEls.forEach((el, i) => {
         if (labels[i] !== undefined) el.textContent = labels[i];
     });
+}
+
+// ============================================================
+// SYNTAX HIGHLIGHTING
+// ============================================================
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function syntaxHighlight(code) {
+    return code.split('\n').map(line => {
+        const t = line.trim();
+        const indent = line.match(/^(\s*)/)[1];
+
+        if (!t) return '';
+
+        // Jump command %% #5
+        if (/^%%\s*#\s*\d+/.test(t))
+            return `${escHtml(indent)}<span class="hl-keyword">${escHtml(t)}</span>`;
+
+        // Comment
+        if (t.startsWith('%%'))
+            return `<span class="hl-comment">${escHtml(line)}</span>`;
+
+        // diagramtype|xxx
+        if (t.startsWith('diagramtype|')) {
+            const type = t.slice('diagramtype|'.length);
+            return `${escHtml(indent)}<span class="hl-meta">diagramtype|</span><span class="hl-type">${escHtml(type)}</span>`;
+        }
+
+        // Lifecycle / block keywords
+        const kwM = t.match(/^(alt|else|end|loop|par|and|opt|rect|critical|break|create|destroy|activate|deactivate|autonumber)\b(.*)/i);
+        if (kwM)
+            return `${escHtml(indent)}<span class="hl-keyword">${escHtml(kwM[1])}</span><span class="hl-text">${escHtml(kwM[2])}</span>`;
+
+        // participant / actor declarations
+        const partM = t.match(/^(participant|actor)\s+(.*)/i);
+        if (partM)
+            return `${escHtml(indent)}<span class="hl-participant">${escHtml(partM[1])}</span> <span class="hl-name">${escHtml(partM[2])}</span>`;
+
+        // note over / left of / right of
+        const noteM = t.match(/^(note\s+(?:over|left\s+of|right\s+of))\s+(.*?)(?::\s*(.*))?$/i);
+        if (noteM)
+            return `${escHtml(indent)}<span class="hl-keyword">${escHtml(noteM[1])}</span> <span class="hl-name">${escHtml(noteM[2])}</span>${noteM[3] !== undefined ? `<span class="hl-label">: ${escHtml(noteM[3])}</span>` : ''}`;
+
+        // Sequence arrows  A->>B: msg  or  A-->>B: msg
+        const seqM = t.match(/^(.+?)(-->>|--x|-->|->>|-x|->)\s*([+\-]?)(\S[^:]*?)(?::\s*(.*))?$/);
+        if (seqM) {
+            const [, from, arrow, mod, to, msg] = seqM;
+            return `${escHtml(indent)}<span class="hl-name">${escHtml(from.trim())}</span><span class="hl-arrow">${escHtml(arrow)}${escHtml(mod)}</span><span class="hl-name">${escHtml(to.trim())}</span>${msg !== undefined ? `<span class="hl-label">: ${escHtml(msg)}</span>` : ''}`;
+        }
+
+        // Block diagram component keywords
+        const bdM = t.match(/^(device|service|database|queue|cloud|group)\s+(.*)/i);
+        if (bdM)
+            return `${escHtml(indent)}<span class="hl-participant">${escHtml(bdM[1])}</span> <span class="hl-text">${escHtml(bdM[2])}</span>`;
+
+        // Block diagram arrows  a -> b : label
+        const bdArrow = t.match(/^(.+?)\s*(-->|->)\s*(.+?)(?::\s*(.*))?$/);
+        if (bdArrow) {
+            const [, from, arrow, to, msg] = bdArrow;
+            return `${escHtml(indent)}<span class="hl-name">${escHtml(from.trim())}</span> <span class="hl-arrow">${escHtml(arrow)}</span> <span class="hl-name">${escHtml(to.trim())}</span>${msg !== undefined ? `<span class="hl-label">: ${escHtml(msg)}</span>` : ''}`;
+        }
+
+        return `<span class="hl-text">${escHtml(line)}</span>`;
+    }).join('\n');
+}
+
+function updateHighlight() {
+    const layer = document.getElementById('highlight-layer');
+    if (!layer) return;
+    layer.innerHTML = syntaxHighlight(editor.value) + '\n';
+    layer.scrollTop = editor.scrollTop;
+    layer.scrollLeft = editor.scrollLeft;
+}
+
+// ============================================================
+// EDITOR ZOOM
+// ============================================================
+let editorFontSize = 13;
+
+function editorZoomIn()  { setEditorFontSize(Math.min(editorFontSize + 1, 22)); }
+function editorZoomOut() { setEditorFontSize(Math.max(editorFontSize - 1, 9)); }
+
+function setEditorFontSize(sz) {
+    editorFontSize = sz;
+    const s = sz + 'px';
+    editor.style.fontSize = s;
+    document.getElementById('highlight-layer').style.fontSize = s;
+    document.getElementById('line-numbers').style.fontSize = s;
+    document.getElementById('editor-font-size').textContent = s;
+    updateLineNumbers();
+    updateHighlight();
+}
+
+// ============================================================
+// SWAP PANES
+// ============================================================
+let panesSwapped = false;
+
+function swapPanes() {
+    panesSwapped = !panesSwapped;
+    const ep = document.getElementById('editor-pane');
+    const rs = document.getElementById('resizer');
+    const pp = document.querySelector('.preview-pane');
+    if (panesSwapped) {
+        ep.style.order = '3';
+        rs.style.order = '2';
+        pp.style.order = '1';
+        ep.style.borderRight = 'none';
+        ep.style.borderLeft = '1px solid var(--border)';
+    } else {
+        ep.style.order = '';
+        rs.style.order = '';
+        pp.style.order = '';
+        ep.style.borderRight = '1px solid var(--border)';
+        ep.style.borderLeft = 'none';
+    }
 }
 
 // ============================================================
@@ -2660,6 +2818,7 @@ function loadExample() {
     const mode = detectMode(editor.value);
     editor.value = (mode !== 'architecture' && UML_EXAMPLES[mode]) ? UML_EXAMPLES[mode] : EXAMPLE;
     updateLineNumbers();
+    updateHighlight();
     clearTimeout(renderTimer);
     render();
 }
@@ -2720,6 +2879,7 @@ document.addEventListener('mouseup', () => {
 // INIT
 // ============================================================
 updateLineNumbers();
+updateHighlight();
 updateModeBar();
 render();
 

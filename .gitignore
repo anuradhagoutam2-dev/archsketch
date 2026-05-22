@@ -26,6 +26,12 @@ build/
 *.swp
 *.swo
 
+# Claude Code internal config
+.claude/
+
+# Source folder (root index.html is the deployable copy)
+FronTEnd/
+
 # OS
 .DS_Store
 Thumbs.db
