@@ -1364,6 +1364,13 @@ function postProcessSequenceSVG(container) {
         r.style.strokeDasharray = '5,3';
     });
 
+    // Destroy X marks
+    svg.querySelectorAll('line.actor-cross').forEach(line => {
+        line.style.stroke      = '#cf222e';
+        line.style.strokeWidth = '2.5px';
+        line.style.strokeLinecap = 'round';
+    });
+
     // Actor keyword participants — oval (high rx/ry)
     svg.querySelectorAll('g.actor > rect').forEach(r => {
         const h  = parseFloat(r.getAttribute('height') || '30');
