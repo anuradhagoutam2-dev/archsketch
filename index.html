@@ -99,6 +99,27 @@
             white-space: nowrap;
         }
 
+        /* TESTING BANNER */
+        .testing-banner {
+            background: #7c3aed;
+            color: #ede9fe;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            padding: 5px 16px;
+            border-bottom: 1px solid #5b21b6;
+        }
+        .testing-banner span {
+            background: #5b21b6;
+            border-radius: 3px;
+            padding: 1px 7px;
+            margin-right: 8px;
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
         /* MODE BAR */
         .modebar {
             height: 36px;
@@ -699,6 +720,12 @@
     <button class="btn" onclick="showHelp()">? syntax guide</button>
     <button class="btn" onclick="swapPanes()" title="swap editor and preview sides">⇄ swap</button>
     <input type="file" id="file-input" accept=".md,.html" style="display:none" onchange="handleFileOpen(event)">
+</div>
+
+<!-- TESTING BANNER -->
+<div class="testing-banner">
+    <span>Testing Phase</span>
+    This app is under active development — features and output may change without notice.
 </div>
 
 <!-- MODE BAR -->
