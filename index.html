@@ -211,8 +211,7 @@
             font-family: 'Consolas', 'Courier New', monospace;
             font-size: 13px;
             line-height: 1.65;
-            white-space: pre-wrap;
-            word-break: break-word;
+            white-space: pre;
             overflow: hidden;
             pointer-events: none;
             tab-size: 2;
@@ -236,6 +235,8 @@
             color: transparent;
             caret-color: #c9d1d9;
             overflow-y: auto;
+            overflow-x: scroll;
+            white-space: pre;
             tab-size: 2;
         }
         #code-editor::placeholder { color: #4a5568; }
@@ -306,7 +307,7 @@
             min-width: 200px;
             vertical-align: top;
         }
-        #diagram-output svg { display: block; }
+        #diagram-output svg { display: block; max-width: none; }
 
         /* ZOOM CONTROLS */
         .zoom-controls {
@@ -426,10 +427,16 @@
         .statusbar .right { margin-left: auto; opacity: 0.7; }
 
         /* SCROLLBAR */
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #8b949e; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1c2128; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #4299E1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #63b3ed; }
+        ::-webkit-scrollbar-corner { background: #1c2128; }
+        /* Preview pane gets a lighter track */
+        .preview-wrapper::-webkit-scrollbar-track { background: #e2e8f0; }
+        .preview-wrapper::-webkit-scrollbar-thumb { background: #4299E1; border-radius: 4px; }
+        .preview-wrapper::-webkit-scrollbar-thumb:hover { background: #2b6cb0; }
+        .preview-wrapper::-webkit-scrollbar-corner { background: #e2e8f0; }
 
         /* HELP MODAL */
         .modal-overlay {
@@ -1580,6 +1587,273 @@ function toMermaid(parsed) {
 }
 
 // ============================================================
+// CUSTOM SEQUENCE DIAGRAM RENDERER
+// Parses Mermaid-compatible sequence syntax, renders SVG directly
+// so notes can be positioned exactly touching their lifelines.
+// Falls back to Mermaid if autonumber is active or on parse error.
+// ============================================================
+const SEQ_CUSTOM = (function () {
+    const C = {
+        pad_x: 40, pad_top: 28,
+        actor_w: 130, actor_h: 40, actor_rx: 4,
+        spacing: 180,          // center-to-center between participants
+        row_h: 52,             // vertical space per message row
+        note_h: 36,            // note box height
+        note_fold: 11,         // dog-ear fold size
+        note_min_w: 88,        // minimum note width
+        note_vpad: 8,          // vertical padding above/below each note
+        block_lh: 22,          // block label strip height
+        act_w: 10,             // activation bar width
+        font: "Calibri, Verdana, sans-serif",
+        fs: 13, title_fs: 15, actor_fs: 13,
+        lifeline_dash: '5,4',
+    };
+    const CLR = {
+        actor_bg: '#4299E1', actor_bd: '#2B6CB0', actor_tx: '#fff',
+        lifeline: '#a0aec0',
+        fwd: '#1a202c', bwd: '#319795',
+        note_bg: '#D69E2E', note_bd: '#975A16', note_tx: '#1a202c', note_fold: '#b7791f',
+        alt: { bg: 'rgba(254,178,178,.18)', bd: '#E53E3E', tx: '#9B2C2C' },
+        loop: { bg: 'rgba(66,153,225,.10)', bd: '#4299E1', tx: '#2B6CB0' },
+        par: { bg: 'rgba(56,161,105,.10)', bd: '#38A169', tx: '#276749' },
+        blk: { bg: 'rgba(113,128,150,.10)', bd: '#718096', tx: '#4a5568' },
+        act_bg: 'rgba(66,153,225,.3)', act_bd: '#4299E1',
+        title: '#1a202c',
+    };
+
+    function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    function tw(s, fs) { return (s||'').length * (fs||C.fs) * 0.6; }
+
+    // ---- parser ----
+    function parse(code) {
+        const participants = [], partIdx = new Map(), elements = [];
+        let title = '';
+        function ensure(name) {
+            if (!partIdx.has(name)) { partIdx.set(name, participants.length); participants.push({ name, type: 'participant' }); }
+        }
+        for (let raw of code.split('\n')) {
+            const line = raw.trim();
+            if (!line || line.startsWith('%%')) continue;
+            if (/^diagramtype\|/i.test(line) || /^sequenceDiagram$/i.test(line)) continue;
+            if (/^autonumber/.test(line)) return null; // let Mermaid handle autonumber
+
+            let m;
+            if (m = line.match(/^title[:\s]\s*(.+)$/i))               { title = m[1].trim(); continue; }
+            if (m = line.match(/^(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i)) {
+                const alias = m[3] ? m[3].trim() : m[2].trim();
+                if (!partIdx.has(alias)) { partIdx.set(alias, participants.length); participants.push({ name: alias, type: m[1].toLowerCase() }); }
+                continue;
+            }
+            if (m = line.match(/^create\s+(participant|actor)\s+(.+)$/i)) { return null; } // too complex
+            if (m = line.match(/^destroy\s+(.+)$/i))                      { return null; }
+            if (m = line.match(/^note\s+(right\s+of|left\s+of|over)\s+([^:]+?)\s*(?::\s*(.*))?$/i)) {
+                const pos = m[1].toLowerCase().includes('right') ? 'right' : m[1].toLowerCase().includes('left') ? 'left' : 'over';
+                const parts = m[2].split(',').map(s=>s.trim()); parts.forEach(ensure);
+                elements.push({ kind: 'note', pos, parts, text: m[3]||'' }); continue;
+            }
+            if (m = line.match(/^(activate|deactivate)\s+(.+)$/i)) {
+                elements.push({ kind: m[1].toLowerCase(), name: m[2].trim() }); continue;
+            }
+            if (m = line.match(/^(alt|loop|par|opt|break|critical|rect)\s*(.*)?$/i)) {
+                elements.push({ kind: 'block', type: m[1].toLowerCase(), label: m[2]||'' }); continue;
+            }
+            if (m = line.match(/^(else|and)\s*(.*)?$/i)) { elements.push({ kind: m[1].toLowerCase(), label: m[2]||'' }); continue; }
+            if (/^end\s*$/i.test(line))                  { elements.push({ kind: 'end' }); continue; }
+
+            // messages: handle ->>+, -->>-, ->>, -->>, ->, -->, etc.
+            if (m = line.match(/^(.+?)\s*(--?>{1,2}[+\-]?|--?[xX])\s*([^:]+?)\s*:\s*(.*)$/)) {
+                let from = m[1].trim().replace(/[+\-]$/, '');
+                const arrowRaw = m[2];
+                let to   = m[3].trim().replace(/^[+\-]/, '').replace(/[+\-]$/, '');
+                const text = m[4];
+                const dashed  = arrowRaw.includes('--');
+                const openHead = !arrowRaw.includes('>>');
+                const activate   = /\+/.test(m[3]);
+                const deactivate = /\-/.test(m[3]) && m[3].trim().startsWith('-');
+                ensure(from); ensure(to);
+                elements.push({ kind: 'msg', from, to, text, dashed, openHead, activate, deactivate }); continue;
+            }
+        }
+        return { title, participants, elements, partIdx };
+    }
+
+    // ---- layout: compute y for each element ----
+    function layout(ast) {
+        let y = 0;
+        const rows = [], blockStack = [], blockSpans = [];
+        for (const el of ast.elements) {
+            if (el.kind === 'msg') {
+                rows.push({ el, y, h: C.row_h }); y += C.row_h;
+            } else if (el.kind === 'note') {
+                const h = C.note_h + C.note_vpad * 2;
+                rows.push({ el, y, h }); y += h;
+            } else if (el.kind === 'block') {
+                blockStack.push({ el, y0: y });
+                rows.push({ el, y, h: C.block_lh }); y += C.block_lh;
+            } else if (el.kind === 'else' || el.kind === 'and') {
+                rows.push({ el, y, h: C.block_lh }); y += C.block_lh;
+            } else if (el.kind === 'end') {
+                const blk = blockStack.pop();
+                if (blk) blockSpans.push({ ...blk.el, y0: blk.y0, y1: y });
+                rows.push({ el, y, h: 0 });
+            } else if (el.kind === 'activate' || el.kind === 'deactivate') {
+                rows.push({ el, y, h: 0 });
+            }
+        }
+        return { rows, blockSpans, totalH: y };
+    }
+
+    // ---- SVG helpers ----
+    function marker(id, color) {
+        return `<marker id="${id}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0 0 L10 3.5 L0 7 Z" fill="${color}"/></marker>`;
+    }
+    function actorBox(cx, y, p) {
+        const x = cx - C.actor_w/2;
+        return `<rect x="${x}" y="${y}" width="${C.actor_w}" height="${C.actor_h}" rx="${C.actor_rx}" ry="${C.actor_rx}" fill="${CLR.actor_bg}" stroke="${CLR.actor_bd}" stroke-width="1.5"/>` +
+               `<text x="${cx}" y="${y + C.actor_h/2 + C.actor_fs*0.38}" text-anchor="middle" font-family="${C.font}" font-size="${C.actor_fs}" font-weight="600" fill="${CLR.actor_tx}">${esc(p.name)}</text>`;
+    }
+    function noteSVG(x, y, w, h, fold, text) {
+        return `<polygon points="${x},${y} ${x+w-fold},${y} ${x+w},${y+fold} ${x+w},${y+h} ${x},${y+h}" fill="${CLR.note_bg}" stroke="${CLR.note_bd}" stroke-width="1.5" stroke-linejoin="round"/>` +
+               `<polygon points="${x+w-fold},${y} ${x+w},${y+fold} ${x+w-fold},${y+fold}" fill="${CLR.note_fold}" stroke="${CLR.note_fold}" stroke-width="1"/>` +
+               `<text x="${x+w/2}" y="${y+h/2+C.fs*0.38}" text-anchor="middle" font-family="${C.font}" font-size="${C.fs}" fill="${CLR.note_tx}">${esc(text)}</text>`;
+    }
+    function blockColors(type) {
+        return CLR[type === 'alt'||type==='opt'||type==='break' ? 'alt' : type==='loop'||type==='critical' ? 'loop' : type==='par' ? 'par' : 'blk'];
+    }
+
+    // ---- render ----
+    function render(ast, rows, blockSpans, totalH) {
+        const N = ast.participants.length;
+        const W = C.pad_x*2 + (N-1)*C.spacing + C.actor_w;
+        const acX = i => C.pad_x + C.actor_w/2 + i*C.spacing;
+        const partIdx = ast.partIdx;
+
+        const out = []; // SVG element strings by layer
+        const bg = [], lifelines = [], bodies = [], tops = [];
+
+        // title
+        let titleY = C.pad_top;
+        if (ast.title) {
+            tops.push(`<text x="${W/2}" y="${titleY+C.title_fs}" text-anchor="middle" font-family="${C.font}" font-size="${C.title_fs}" font-weight="bold" fill="${CLR.title}">${esc(ast.title)}</text>`);
+            titleY += C.title_fs + 12;
+        }
+
+        const actorTopY = titleY;
+        const lifeY0 = actorTopY + C.actor_h + 6;
+        const lifeY1 = lifeY0 + totalH + 10;
+        const svgH = lifeY1 + C.actor_h + C.pad_top;
+
+        // participant boxes top
+        ast.participants.forEach((p, i) => tops.push(actorBox(acX(i), actorTopY, p)));
+        // participant boxes bottom
+        ast.participants.forEach((p, i) => tops.push(actorBox(acX(i), lifeY1, p)));
+
+        // lifelines
+        ast.participants.forEach((_, i) => {
+            lifelines.push(`<line x1="${acX(i)}" y1="${lifeY0}" x2="${acX(i)}" y2="${lifeY1}" stroke="${CLR.lifeline}" stroke-width="1.5" stroke-dasharray="${C.lifeline_dash}"/>`);
+        });
+
+        // block backgrounds
+        for (const blk of blockSpans) {
+            const bc = blockColors(blk.type);
+            const y0 = lifeY0 + blk.y0, y1 = lifeY0 + blk.y1;
+            bg.push(`<rect x="0" y="${y0}" width="${W}" height="${y1-y0}" fill="${bc.bg}" stroke="${bc.bd}" stroke-width="1.5" rx="2"/>`);
+        }
+
+        // activation bars
+        const actBars = new Map(); // name → start_y
+        for (const { el, y } of rows) {
+            const ay = lifeY0 + y;
+            if (el.kind === 'activate') {
+                const i = partIdx.get(el.name);
+                if (i !== undefined) actBars.set(el.name, ay);
+            } else if (el.kind === 'deactivate') {
+                const i = partIdx.get(el.name);
+                if (i !== undefined && actBars.has(el.name)) {
+                    const startY = actBars.get(el.name); actBars.delete(el.name);
+                    const bx = acX(i) - C.act_w/2;
+                    bodies.push(`<rect x="${bx}" y="${startY}" width="${C.act_w}" height="${ay-startY}" fill="${CLR.act_bg}" stroke="${CLR.act_bd}" stroke-width="1"/>`);
+                }
+            }
+        }
+
+        // messages, notes, block labels
+        for (const { el, y, h } of rows) {
+            const ay = lifeY0 + y;
+            if (el.kind === 'msg') {
+                const fi = partIdx.get(el.from), ti = partIdx.get(el.to);
+                if (fi === undefined || ti === undefined) continue;
+                const x1 = acX(fi), x2 = acX(ti);
+                const my = ay + C.row_h/2;
+                const bwd = x2 < x1;
+                const color = bwd ? CLR.bwd : CLR.fwd;
+                const mid = `m${Date.now()}_${Math.random().toString(36).slice(2)}`;
+                // dynamic marker to avoid ID conflicts
+                bg.push(`<defs><marker id="${mid}" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><path d="M0 0 L10 3.5 L0 7 Z" fill="${color}"/></marker></defs>`);
+                const isSelf = fi === ti;
+                if (isSelf) {
+                    const ox = acX(fi) + C.actor_w*0.4;
+                    bodies.push(`<path d="M${x1},${my-10} C${ox+30},${my-20} ${ox+30},${my+20} ${x1},${my+10}" fill="none" stroke="${color}" stroke-width="1.5" ${el.dashed?'stroke-dasharray="5,3"':''} marker-end="url(#${mid})"/>`);
+                    bodies.push(`<text x="${ox+36}" y="${my+5}" font-family="${C.font}" font-size="${C.fs}" fill="${color}">${esc(el.text)}</text>`);
+                } else {
+                    bodies.push(`<line x1="${x1}" y1="${my}" x2="${x2}" y2="${my}" stroke="${color}" stroke-width="1.5" ${el.dashed?'stroke-dasharray="5,3"':''} marker-end="url(#${mid})"/>`);
+                    bodies.push(`<text x="${(x1+x2)/2}" y="${my-6}" text-anchor="middle" font-family="${C.font}" font-size="${C.fs}" fill="${CLR.fwd}">${esc(el.text)}</text>`);
+                }
+            } else if (el.kind === 'note') {
+                const pi0 = partIdx.get(el.parts[0]);
+                const pi1 = el.parts.length > 1 ? partIdx.get(el.parts[el.parts.length-1]) : pi0;
+                if (pi0 === undefined) continue;
+                const lx0 = acX(pi0), lx1 = pi1 !== undefined ? acX(pi1) : lx0;
+                const minW = Math.max(tw(el.text) + 24, C.note_min_w);
+                let nx, nw;
+                if (el.pos === 'right') {
+                    nw = Math.max(minW, C.actor_w * 0.7);
+                    nx = lx0;                                      // left edge AT lifeline
+                } else if (el.pos === 'left') {
+                    nw = Math.max(minW, C.actor_w * 0.7);
+                    nx = lx0 - nw;                                  // right edge AT lifeline
+                } else {
+                    const span = Math.abs(lx1 - lx0) + C.actor_w * 0.5;
+                    nw = Math.max(minW, span);
+                    nx = (lx0 + lx1)/2 - nw/2;
+                }
+                bodies.push(noteSVG(nx, ay + C.note_vpad, nw, C.note_h, C.note_fold, el.text));
+            } else if (el.kind === 'block') {
+                const bc = blockColors(el.type);
+                bodies.push(`<rect x="0" y="${ay}" width="${W}" height="${C.block_lh}" fill="${bc.bd}" rx="2"/>`);
+                bodies.push(`<text x="8" y="${ay+C.block_lh-5}" font-family="${C.font}" font-size="11" font-weight="bold" fill="#fff">${esc(el.type)}${el.label?' ['+el.label+']':''}</text>`);
+            } else if (el.kind === 'else' || el.kind === 'and') {
+                bodies.push(`<line x1="0" y1="${ay}" x2="${W}" y2="${ay}" stroke="${CLR.blk.bd}" stroke-dasharray="4,3" stroke-width="1"/>`);
+                bodies.push(`<text x="8" y="${ay+14}" font-family="${C.font}" font-size="11" fill="${CLR.blk.tx}">${esc(el.kind)}${el.label?' ['+el.label+']':''}</text>`);
+            }
+        }
+
+        // compose layers: bg → lifelines → bodies → tops
+        const all = [
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${svgH}" style="background:#fff;font-family:${C.font}">`,
+            ...bg, ...lifelines, ...bodies, ...tops,
+            `</svg>`
+        ];
+        return all.join('\n');
+    }
+
+    return function renderCustomSeq(code, container) {
+        try {
+            const ast = parse(code);
+            if (!ast || !ast.participants.length) return false;
+            const { rows, blockSpans, totalH } = layout(ast);
+            const svg = render(ast, rows, blockSpans, totalH);
+            container.innerHTML = svg;
+            return true;
+        } catch(e) {
+            return false;
+        }
+    };
+})();
+
+// ============================================================
 // MERMAID INIT
 // ============================================================
 mermaid.initialize({
@@ -1767,6 +2041,20 @@ async function render() {
                         return n.replace(/^(\d+)/, d => String(parseInt(d) + startVal - 1));
                     });
                 }
+            }
+        }
+
+        // For sequence diagrams without autonumber, try the custom renderer first.
+        // It renders notes touching the lifeline exactly (like seqdiag).
+        // Falls back to Mermaid if custom renderer returns false.
+        if (mode === 'sequence' && seqNumMode === 'off') {
+            const ok = SEQ_CUSTOM(mmdBody, output);
+            if (ok) {
+                resetZoomDisplay();
+                diagramInfo.textContent = 'sequence diagram';
+                updateStatus(lines.length, 0, 0);
+                statusbar.classList.remove('has-errors');
+                return;
             }
         }
 
