@@ -818,12 +818,12 @@ Bob-->>-Alice: reply (deactivate)    // - deactivates lifebar</pre>
         <h3>sequence — create and destroy participants</h3>
         <pre>create participant Session           // participant appears mid-diagram
 Alice->>Session: init(userId)
-create actor Auditor as Audit Log   // create an actor mid-flow
+create actor Auditor                // create an actor mid-flow
 Session->>Auditor: write entry
-destroy Session                     // destroy goes BEFORE the last message to that participant
-Alice->>Session: token expired      // X mark drawn here on Session lifeline
+destroy Session                     // destroy then a message FROM that participant
+Session-->>Alice: token expired     // X mark drawn on Session lifeline here
 destroy Auditor
-Session->>Auditor: flush log        // X mark drawn here on Auditor lifeline</pre>
+Auditor-->>Alice: log flushed       // X mark drawn on Auditor lifeline here</pre>
         <div class="rule-item">create and destroy work exactly as on sequencediagram.org — participants can appear and disappear mid-flow</div>
         <div class="rule-item">destroy draws an X through the lifeline at that point</div>
 
@@ -1590,7 +1590,7 @@ mermaid.initialize({
         width:           150,
         height:          65,
         boxMargin:       10,
-        mirrorActors:    true,
+        mirrorActors:    false,
         useMaxWidth:     false,
         wrap:            true,
     },
@@ -2198,7 +2198,7 @@ APIGateway->>OTPService: request 2FA OTP
 OTPService-->>Customer: SMS OTP code
 Customer->>APIGateway: submit OTP
 destroy OTPService
-APIGateway->>OTPService: close session
+OTPService-->>APIGateway: session closed
 
 loop retry on timeout
     APIGateway->>CoreBanking: debit source account
