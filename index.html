@@ -220,6 +220,7 @@
         }
         #code-editor {
             position: absolute;
+            z-index: 1;
             left: 44px;
             top: 0;
             right: 0;
@@ -236,8 +237,6 @@
             caret-color: #c9d1d9;
             overflow-y: auto;
             tab-size: 2;
-            position: relative;
-            z-index: 1;
         }
         #code-editor::placeholder { color: #4a5568; }
         #code-editor::selection { background: rgba(88, 166, 255, 0.3); }
@@ -1366,17 +1365,33 @@ function postProcessSequenceSVG(container) {
         }
     });
 
-    // Note over / left / right — mustard, square corners
+    // Notes: dog-ear shape + reposition to touch the lifeline
+    // Notes: dog-ear shape (folded top-right corner)
     svg.querySelectorAll('rect.note').forEach(r => {
-        r.style.fill        = '#D69E2E';
-        r.style.stroke      = '#975A16';
-        r.style.strokeWidth = '1.5px';
-        r.setAttribute('rx', '0');
-        r.setAttribute('ry', '0');
+        const x    = parseFloat(r.getAttribute('x') || '0');
+        const y    = parseFloat(r.getAttribute('y') || '0');
+        const w    = parseFloat(r.getAttribute('width')  || '0');
+        const h    = parseFloat(r.getAttribute('height') || '0');
+        const fold = Math.min(w * 0.22, h * 0.45, 12);
+        const NS   = 'http://www.w3.org/2000/svg';
+
+        const body = document.createElementNS(NS, 'polygon');
+        body.setAttribute('points',
+            `${x},${y} ${x+w-fold},${y} ${x+w},${y+fold} ${x+w},${y+h} ${x},${y+h}`);
+        body.style.fill = '#D69E2E'; body.style.stroke = '#975A16';
+        body.style.strokeWidth = '1.5px'; body.style.strokeLinejoin = 'round';
+
+        const foldTri = document.createElementNS(NS, 'polygon');
+        foldTri.setAttribute('points',
+            `${x+w-fold},${y} ${x+w},${y+fold} ${x+w-fold},${y+fold}`);
+        foldTri.style.fill = '#975A16'; foldTri.style.stroke = '#975A16';
+        foldTri.style.strokeWidth = '1px';
+
+        const parent = r.parentElement;
+        if (parent) { parent.insertBefore(body, r); parent.insertBefore(foldTri, r); }
+        r.style.display = 'none';
     });
-    svg.querySelectorAll('.noteText, text.noteText').forEach(t => {
-        t.style.fill = '#1a202c';
-    });
+    svg.querySelectorAll('.noteText, text.noteText').forEach(t => { t.style.fill = '#1a202c'; });
 
     // Label boxes: loop/par/critical = black; alt/opt/break = light-red
     svg.querySelectorAll('rect.labelBox').forEach(r => {
