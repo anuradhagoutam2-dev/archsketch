@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8000/health\" -Method GET)",
+      "PowerShell(Stop-Process -Name \"uvicorn\" -ErrorAction SilentlyContinue)",
+      "Bash(gh --version)",
+      "Bash(Copy-Item \"C:\\\\Myprojects\\\\ArchMate\\\\FronTEnd\\\\index.html\" \"C:\\\\Myprojects\\\\ArchMate\\\\index.html\" -Force)",
+      "Bash(Write-Host \"Synced\")",
+      "PowerShell(Copy-Item \"C:\\\\Myprojects\\\\ArchMate\\\\FronTEnd\\\\index.html\" \"C:\\\\Myprojects\\\\ArchMate\\\\index.html\" -Force)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git -C /c/Myprojects/ArchMate add README.md)",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: correct GitHub URLs in README to anuradhagoutam2-dev\")",
+      "Bash(git -C /c/Myprojects/ArchMate push origin main)",
+      "Bash(git -C /c/Myprojects/ArchMate remote get-url origin)",
+      "Bash(git -C /c/Myprojects/ArchMate remote set-url origin https://github.com/archsketch-app/archsketch-app.github.io.git)",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: update URLs to archsketch-app org and new repo name\")",
+      "Bash(git -C /c/Myprojects/ArchMate add index.html)",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: simplify sequence example to avoid Mermaid 10.9.6 parse errors\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"feat: sequence diagram autonumber toggle — off / 1 2 3 / 1.1 1.2 with start override\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: clean orphaned Mermaid divs, show exact error message instead of generic\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: correct Mermaid orphan div cleanup, show error count in status bar for UML modes\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: body-snapshot cleanup kills bombs reliably, error count for all UML error cases\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"feat: teal number circles, bold white text, larger radius for hierarchical labels\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"feat: letter suffixes inside blocks \\(1a 1b\\), %% #N jump for conditional skipping\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: rename hier button label to 1a 1b\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"feat: tabs open blank with only diagramtype prefix, example button still loads samples\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: destroy must precede last message to participant — add close session message after destroy OTPService\")",
+      "Bash(git -C /c/Myprojects/ArchMate add FEATURES.md)",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"docs: add FEATURES.md — full feature reference for ArchSketch v1.0\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: mirrorActors false, destroy pattern must use message FROM participant not TO it\")",
+      "Bash(git -C /c/Myprojects/ArchMate commit -m \"fix: style actor-cross lines to show red X mark on destroy\")"
+    ]
+  }
+}
