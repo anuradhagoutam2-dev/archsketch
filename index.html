@@ -2709,48 +2709,66 @@ const UML_EXAMPLES = {
 
 'sequence':
 `diagramtype|sequence
-participant Customer
-participant MobileBanking
-participant APIGateway
-participant FraudDetection
-participant CoreBanking
-actor ExternalBank
+actor User
+participant Browser
+participant WebApp
+participant AuthService
+participant UserService
+actor IdentityProvider
 
-note over Customer,MobileBanking: retail banking - fund transfer
+note over User,IdentityProvider: oauth2 sso — login and token refresh
 
-Customer->>MobileBanking: initiate transfer 500 GBP
-MobileBanking->>APIGateway: POST /transfers
-APIGateway->>FraudDetection: screen transaction
-note right of FraudDetection: ai risk scoring
-alt high risk score
-    FraudDetection-->>APIGateway: blocked
-    APIGateway-->>MobileBanking: 403 transaction blocked
-    MobileBanking-->>Customer: transfer declined
-else cleared
-    FraudDetection-->>APIGateway: risk score ok
+User->>Browser: visit /dashboard
+Browser->>WebApp: GET /dashboard
+WebApp-->>Browser: 302 redirect to /auth/login
+
+Browser->>AuthService: GET /auth/login?client_id=webapp
+AuthService-->>Browser: redirect to identity provider
+
+Browser->>IdentityProvider: authorisation request + state param
+alt user not yet authenticated
+    IdentityProvider-->>Browser: render login page
+    User->>IdentityProvider: enter credentials
+else session cookie present
+    note right of IdentityProvider: silent re-auth
 end
+IdentityProvider-->>Browser: auth code + state
 
-create participant OTPService
-APIGateway->>OTPService: request 2FA OTP
-OTPService-->>Customer: SMS OTP code
-Customer->>APIGateway: submit OTP
-destroy OTPService
-OTPService-->>APIGateway: session closed
+Browser->>AuthService: POST /auth/callback code=xyz
+AuthService->>IdentityProvider: exchange code for id_token
+IdentityProvider-->>AuthService: id_token + access_token
 
-loop retry on timeout
-    APIGateway->>CoreBanking: debit source account
-    CoreBanking-->>APIGateway: debit confirmed
-end
+create participant SessionStore
+AuthService->>SessionStore: persist refresh token (encrypted)
+SessionStore-->>AuthService: session_id saved
 
-par settle and notify
-    APIGateway->>ExternalBank: SWIFT transfer
-    ExternalBank-->>APIGateway: settlement confirmed
+par issue tokens to browser
+    AuthService-->>Browser: set-cookie refresh_token (httpOnly, secure)
 and
-    APIGateway->>MobileBanking: push notification
-    MobileBanking-->>Customer: transfer complete
+    AuthService-->>Browser: JWT access_token 15 min TTL
 end
 
-note over Customer,ExternalBank: funds settled`,
+Browser->>WebApp: GET /dashboard Authorization: Bearer <JWT>
+WebApp->>+UserService: GET /users/me
+UserService-->>-WebApp: profile + permissions
+WebApp-->>Browser: 200 dashboard payload
+
+note over Browser,AuthService: access token expires
+
+loop up to 3 silent refresh attempts
+    Browser->>AuthService: POST /auth/refresh (cookie)
+    AuthService->>SessionStore: validate refresh token
+    SessionStore-->>AuthService: token valid
+    AuthService-->>Browser: new JWT access_token
+end
+
+destroy SessionStore
+SessionStore-->>AuthService: session revoked on logout
+
+Browser->>WebApp: GET /dashboard Authorization: Bearer <new JWT>
+WebApp-->>Browser: 200 dashboard payload
+
+note over User,IdentityProvider: session active — user authenticated`,
 
 'class':
 `diagramtype|class
