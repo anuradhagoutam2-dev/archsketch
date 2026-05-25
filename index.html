@@ -2713,6 +2713,7 @@ actor User
 participant Browser
 participant WebApp
 participant AuthService
+participant SessionStore
 participant UserService
 actor IdentityProvider
 
@@ -2738,7 +2739,6 @@ Browser->>AuthService: POST /auth/callback code=xyz
 AuthService->>IdentityProvider: exchange code for id_token
 IdentityProvider-->>AuthService: id_token + access_token
 
-create participant SessionStore
 AuthService->>SessionStore: persist refresh token (encrypted)
 SessionStore-->>AuthService: session_id saved
 
@@ -2762,13 +2762,10 @@ loop up to 3 silent refresh attempts
     AuthService-->>Browser: new JWT access_token
 end
 
+note over Browser,WebApp: user logs out — session revoked
 destroy SessionStore
-SessionStore-->>AuthService: session revoked on logout
-
-Browser->>WebApp: GET /dashboard Authorization: Bearer <new JWT>
-WebApp-->>Browser: 200 dashboard payload
-
-note over User,IdentityProvider: session active — user authenticated`,
+AuthService->>SessionStore: delete session
+WebApp-->>Browser: 200 logged out`,
 
 'class':
 `diagramtype|class
