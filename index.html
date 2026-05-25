@@ -1489,7 +1489,8 @@ function postProcessSequenceSVG(container) {
     svg.querySelectorAll('rect.rect').forEach(r => {
         r.style.fill            = 'rgba(113,128,150,0.10)';
         r.style.stroke          = '#718096';
-        r.style.strokeDasharray = '5,3';
+        r.style.strokeWidth     = '2px';
+        r.style.strokeDasharray = '10,5';
     });
 
     // Destroy X marks
